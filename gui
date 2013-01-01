@@ -1,0 +1,113 @@
+#!/usr/bin/env python
+
+import signal
+from gi.repository import GObject, Gtk, GLib, Pango, Soup
+
+class FileShareUI (Gtk.Window):
+    def __init__ (self):
+        Gtk.Window.__init__ (self, title="fileshare-ui")
+
+        self.port = 0;
+
+        self.set_default_size (300, 200)
+
+        hbox = Gtk.HBox (spacing=6)
+        self.add (hbox)
+
+        vbox = Gtk.VBox (spacing=12)
+        hbox.pack_start (vbox, True, False, 0)
+
+        self.share_button = Gtk.Button ()
+        self.share_button.connect ("clicked", self.on_button_clicked)
+        vbox.pack_start(self.share_button, False, False, 0)
+
+        self.sharing_label = Gtk.Label ("")
+        self.sharing_label.set_ellipsize (Pango.EllipsizeMode.END)
+        vbox.pack_start (self.sharing_label, False, False, 0)
+
+        self.shared_file = None
+        self.update_ui()
+
+        #testing
+        self.port = 55555;
+        self.start_sharing ("/home/jku/temporaomore")
+
+
+    def update_ui (self):
+        if (self.shared_file == None):
+            self.share_button.set_label ("Share a file")
+            self.sharing_label.set_text ("Currently not sharing anything.")
+        else:
+            self.share_button.set_label ("Stop sharing")
+            self.sharing_label.set_text ("Now Sharing " + GLib.path_get_basename (self.shared_file))
+
+
+    def on_soup_request (self, server, message, path, query, client, wtf_is_this):
+        if (message.method != "GET"):
+            message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
+            print "request: not allowed"
+            return 
+
+        content = GLib.file_get_contents (self.shared_file)[1]
+        if (content == None):
+            message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
+            print "request: internal error"
+            return 
+
+        message.response_body.append_buffer (Soup.Buffer.new (content))
+
+        print "request: ok"
+        message.set_status (Soup.KnownStatusCode.OK)
+
+
+    def on_soup_request_finished (self, server, message, client):
+        print "finished"
+
+
+    def start_sharing (self, filename):
+        self.shared_file = filename 
+
+        self.server = GObject.new (Soup.Server, port=self.port)
+        if (self.server == None):
+            print "Failed to start server"
+            return
+
+        self.server.add_handler (None, self.on_soup_request, None)
+        self.server.connect ("request-finished", self.on_soup_request_finished)
+        print "Server starting on port ", self.server.get_port()
+        self.server.run_async ()
+
+        self.update_ui()
+
+
+    def stop_sharing (self):
+            self.shared_file = None
+
+            self.server.quit()
+            self.server = None
+
+            self.update_ui()
+
+    def on_button_clicked (self, widget):
+        if (self.shared_file != None):
+            self.stop_sharing ()
+        else:
+            dialog = Gtk.FileChooserDialog ("Pick a file to share", self,
+                                            Gtk.FileChooserAction.OPEN,
+                                            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+                                             Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
+
+            response = dialog.run()
+            if (response == Gtk.ResponseType.OK):
+                self.start_sharing (dialog.get_filename ())
+
+            dialog.destroy()
+
+
+
+win = FileShareUI ()
+win.connect ("delete-event", Gtk.main_quit)
+win.show_all ()
+
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+Gtk.main ()
