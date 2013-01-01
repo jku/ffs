@@ -1,10 +1,7 @@
 
 Todo
- - figure out what the IP(s) that soup exposes are, and show them on UI
- - try to test all the IPs before showing
+ - maybe try to test all the IPs before showing
  - use gupnp to punch NATs, show that IP as  well
- - try to 
- - add info text "X has been dowloaded once"
  - upload functionality (a web form for uploading)
 
 Possible options to add:
