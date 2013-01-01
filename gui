@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
-import signal, socket
+import signal, socket, sys
 from gi.repository import GObject, Gtk, GLib, Pango, Soup
 
 class FileShareUI (Gtk.Window):
-    def __init__ (self):
+    def __init__ (self, filename):
         Gtk.Window.__init__ (self, title="fileshare-ui")
 
         self.port = 0;
@@ -35,9 +35,8 @@ class FileShareUI (Gtk.Window):
         self.shared_file = None
         self.update_ui()
 
-        #testing
-        self.port = 55555;
-        self.start_sharing ("/home/jku/temporaomore")
+        if (filename != None):
+            self.start_sharing (filename)
 
 
     # Utility function to guess the IP (as a string) where the server can be
@@ -74,7 +73,8 @@ class FileShareUI (Gtk.Window):
         else:
             self.share_button.set_label ("Stop sharing")
             self.sharing_label.set_text ("Now Sharing '{}' at".format (GLib.path_get_basename (self.shared_file)))
-            self.address_label.set_text ("{}:{}".format (self.local_ip, self.port))
+            self.address_label.set_text ("{}:{}".format (self.local_ip, self.server.get_port()))
+            self.address_label.select_region (0, -1)
             if (self.request_count == 0):
                 self.info_label.set_text ("It has not been downloaded yet.")
             elif (self.request_finished_count == 0):
@@ -102,6 +102,8 @@ class FileShareUI (Gtk.Window):
             print "request: internal error"
             return 
 
+        attachment = {"filename": GLib.path_get_basename (self.shared_file)}
+        message.response_headers.set_content_disposition ("attachment", attachment)
         message.response_body.append_buffer (Soup.Buffer.new (content))
 
         self.request_count += 1
@@ -152,16 +154,17 @@ class FileShareUI (Gtk.Window):
                                             Gtk.FileChooserAction.OPEN,
                                             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
                                              Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
-
-            response = dialog.run()
-            if (response == Gtk.ResponseType.OK):
+            if (dialog.run() == Gtk.ResponseType.OK):
                 self.start_sharing (dialog.get_filename ())
 
             dialog.destroy()
 
 
+filename = None
+if (len (sys.argv) > 1):
+    filename = sys.argv[1]
 
-win = FileShareUI ()
+win = FileShareUI (filename)
 win.connect ("delete-event", Gtk.main_quit)
 win.show_all ()
 
