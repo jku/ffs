@@ -115,9 +115,11 @@ class FileShareUI (Gtk.Window):
 
 
     def on_soup_request_finished (self, server, message, client):
-        self.request_finished_count += 1
-        self.update_ui ()
-        print "request: finished"
+        if (message.status_code == Soup.KnownStatusCode.OK and
+            message.method == "GET"):
+            self.request_finished_count += 1
+            self.update_ui ()
+            print "request: finished"
 
 
     def start_sharing (self, filename):
