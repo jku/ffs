@@ -8,7 +8,7 @@ class FileShareUI (Gtk.Window):
     def __init__ (self, filename):
         Gtk.Window.__init__ (self, title="fileshare-ui")
 
-        self.port = 0;
+        self.port = 55555;
 
         self.set_default_size (400, 200)
 
@@ -92,9 +92,12 @@ class FileShareUI (Gtk.Window):
 
 
     def on_soup_request (self, server, message, path, query, client, wtf_is_this):
+        if (message.method == "HEAD"):
+            message.set_status (Soup.KnownStatusCode.OK)
+            return
+
         if (message.method != "GET"):
             message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
-            print "request: not allowed"
             return 
 
         if (self.shared_content == None):
@@ -122,6 +125,26 @@ class FileShareUI (Gtk.Window):
             print "request: finished"
 
 
+    def on_test_response (self, session, message, data):
+        if (message.response_headers.get_one ("server") == "my-first-file-server"):
+            print "Uri seems to be available"
+
+
+    def confirm_uri (self):
+        uri = Soup.URI ()
+        uri.set_scheme ("http")
+        uri.set_host (self.local_ip)
+        uri.set_path ("/")
+        uri.set_port (self.server.get_port ())
+
+        msg = Soup.Message()
+        msg.set_property ("uri", uri)
+        msg.set_property ("method", "HEAD")
+
+        session = Soup.SessionSync ()
+        session.queue_message (msg, self.on_test_response, None)
+
+
     def start_sharing (self, filename):
         self.shared_file = filename 
         self.shared_content = None
@@ -129,18 +152,24 @@ class FileShareUI (Gtk.Window):
         self.request_count = 0
         self.request_finished_count = 0
 
-        self.server = GObject.new (Soup.Server, port=self.port)
+        self.server = GObject.new (Soup.Server,
+                                   port = self.port,
+                                   server_header = "my-first-file-server")
         if (self.server == None):
             print "Failed to start server"
             return
-
         self.server.add_handler (None, self.on_soup_request, None)
         self.server.connect ("request-finished", self.on_soup_request_finished)
-
-        print "Server starting, guessed address {}:{}".format(self.local_ip, self.server.get_port ())
+        print "Server starting, guessed uri http://{}:{}".format(self.local_ip, self.server.get_port ())
         self.server.run_async ()
 
+
+        # Make sure the URI is really available (at least from this
+        # machine).
+        self.confirm_uri ()
+
         self.update_ui()
+
 
 
     def stop_sharing (self):

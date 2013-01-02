@@ -2,7 +2,7 @@
 Todo
  - use gupnp-igd to punch NATs. If an igd is present, only show that
    IP by default (maybe add a "share in local network only" option)
- - maybe try to test all the IPs before showing them ?
+ - only show URIs after they have been confirmed with confirm_uri()
  - try to make informed guesses on what is an "internet" ip and
    what is in the local network:
     IANA private networks:
