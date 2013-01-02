@@ -1,8 +1,10 @@
 
-Todo
- - use gupnp-igd to punch NATs. If an igd is present, only show that
-   IP by default (maybe add a "share in local network only" option)
- - only show URIs after they have been confirmed with confirm_uri()
+TODO: UPnP
+ - If gupnp-igd is used and confirmed, only show that IP by default 
+   (maybe add a "share in local network only" option)
+ - figure out why gupnp-igd error signal handler crashes
+
+TODO: UI
  - try to make informed guesses on what is an "internet" ip and
    what is in the local network:
     IANA private networks:
@@ -13,12 +15,18 @@ Todo
       100.64.0.0 - 100.127.255.255
    Alternatively, could just guess that any ipv4 address that is not
    from gupnp-igd is in the local network...
+ - only show one ip by default normally:
+    - confirmd upnp (hide local)
+    - confirmed local (hide upnp)
+    - unconfirmed upnp & unconfirmed local
+ - Need a name for this thing...
+
+TODO: new features
  - upload functionality (a web form for uploading)
  - share a whole directory:
    Probably best to zip/bzip it up (like woof does), but it would be possible to
    use a directory listing (like soup simple-httpd does)
      "7z -y -tzip -bd -mx=9 a $TEMPDIR/shared-dir.zip -- shared-dir"
- - Need a name for this thing...
 
 Possible options to add:
  - manually select the interface/IP

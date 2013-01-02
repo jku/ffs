@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import signal, socket, sys
-from gi.repository import GObject, Gtk, GLib, Pango, Soup
+from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
 
 
 class FileShareUI (Gtk.Window):
@@ -92,20 +92,21 @@ class FileShareUI (Gtk.Window):
 
 
     def on_soup_request (self, server, message, path, query, client, wtf_is_this):
-        if (message.method == "HEAD"):
-            message.set_status (Soup.KnownStatusCode.OK)
-            return
-
         if (message.method != "GET"):
-            message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
+            if (message.method == "HEAD"):
+                message.set_status (Soup.KnownStatusCode.OK)
+            else:
+                message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
             return 
 
         if (self.shared_content == None):
             self.shared_content = GLib.file_get_contents (self.shared_file)[1]
         if (self.shared_content == None):
             message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
-            print "request: internal error"
+            print "Internal error: failed to get file contents ({})".format (self.shared_file)
             return 
+
+        message.set_status (Soup.KnownStatusCode.OK)
 
         attachment = {"filename": GLib.path_get_basename (self.shared_file)}
         message.response_headers.set_content_disposition ("attachment", attachment)
@@ -113,8 +114,6 @@ class FileShareUI (Gtk.Window):
 
         self.request_count += 1
         self.update_ui ()
-        print "request: ok"
-        message.set_status (Soup.KnownStatusCode.OK)
 
 
     def on_soup_request_finished (self, server, message, client):
@@ -130,20 +129,28 @@ class FileShareUI (Gtk.Window):
             print "Uri seems to be available"
 
 
-    def confirm_uri (self):
+    def confirm_uri (self, ip, port):
         uri = Soup.URI ()
         uri.set_scheme ("http")
-        uri.set_host (self.local_ip)
+        uri.set_host (ip)
         uri.set_path ("/")
-        uri.set_port (self.server.get_port ())
+        uri.set_port (port)
 
         msg = Soup.Message()
         msg.set_property ("uri", uri)
         msg.set_property ("method", "HEAD")
 
         session = Soup.SessionSync ()
+        print "Testing URI {} ...".format (uri.to_string(False))
         session.queue_message (msg, self.on_test_response, None)
 
+
+    def on_igd_mapped_port (self, igd, proto,
+                            ext_ip, old_ext_ip,
+                            ext_port, local_ip,
+                            desc, data):
+        print "NAT punched at http://{}:{}".format (ext_ip, ext_port)
+        self.confirm_uri (ext_ip, ext_port)
 
     def start_sharing (self, filename):
         self.shared_file = filename 
@@ -166,17 +173,28 @@ class FileShareUI (Gtk.Window):
 
         # Make sure the URI is really available (at least from this
         # machine).
-        self.confirm_uri ()
+        self.confirm_uri (self.local_ip, self.server.get_port ())
 
         self.update_ui()
 
+        self.igd = GUPnPIgd.SimpleIgd ()
+        self.igd.connect ("mapped-external-port", self.on_igd_mapped_port)
+        self.igd.add_port ("TCP",
+                           self.server.get_port (), # remote port
+                           self.local_ip,
+                           self.server.get_port (),
+                           0,
+                           "my-first-file-server");
 
 
     def stop_sharing (self):
         self.shared_file = None
         self.shared_content = None
 
-        self.server.quit()
+        self.igd.remove_port ("TCP", self.server.get_port ())
+        self.igd = None
+
+        self.server.disconnect()
         self.server = None
 
         self.update_ui()
