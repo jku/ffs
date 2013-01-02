@@ -3,6 +3,7 @@
 import signal, socket, sys
 from gi.repository import GObject, Gtk, GLib, Pango, Soup
 
+
 class FileShareUI (Gtk.Window):
     def __init__ (self, filename):
         Gtk.Window.__init__ (self, title="fileshare-ui")
@@ -42,7 +43,6 @@ class FileShareUI (Gtk.Window):
     # Utility function to guess the IP (as a string) where the server can be
     # reached from the outside. Quite nasty problem actually.
     # Copied from http://www.home.unix-ag.org/simon/woof, GPL 2+
-
     def find_ip (self):
         # we get a UDP-socket for the TEST-networks reserved by IANA.
         # It is highly unlikely, that there is special routing used
@@ -90,21 +90,23 @@ class FileShareUI (Gtk.Window):
                 else:
                     self.info_label.set_text ("It is being downloaded now and has been downloaded {} times already.".format (self.request_finished_count))
 
+
     def on_soup_request (self, server, message, path, query, client, wtf_is_this):
         if (message.method != "GET"):
             message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
             print "request: not allowed"
             return 
 
-        content = GLib.file_get_contents (self.shared_file)[1]
-        if (content == None):
+        if (self.shared_content == None):
+            self.shared_content = GLib.file_get_contents (self.shared_file)[1]
+        if (self.shared_content == None):
             message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
             print "request: internal error"
             return 
 
         attachment = {"filename": GLib.path_get_basename (self.shared_file)}
         message.response_headers.set_content_disposition ("attachment", attachment)
-        message.response_body.append_buffer (Soup.Buffer.new (content))
+        message.response_body.append_buffer (Soup.Buffer.new (self.shared_content))
 
         self.request_count += 1
         self.update_ui ()
@@ -120,6 +122,7 @@ class FileShareUI (Gtk.Window):
 
     def start_sharing (self, filename):
         self.shared_file = filename 
+        self.shared_content = None
         self.local_ip = self.find_ip ()
         self.request_count = 0
         self.request_finished_count = 0
@@ -139,12 +142,14 @@ class FileShareUI (Gtk.Window):
 
 
     def stop_sharing (self):
-            self.shared_file = None
+        self.shared_file = None
+        self.shared_content = None
 
-            self.server.quit()
-            self.server = None
+        self.server.quit()
+        self.server = None
 
-            self.update_ui()
+        self.update_ui()
+
 
     def on_button_clicked (self, widget):
         if (self.shared_file != None):
@@ -160,6 +165,8 @@ class FileShareUI (Gtk.Window):
             dialog.destroy()
 
 
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+
 filename = None
 if (len (sys.argv) > 1):
     filename = sys.argv[1]
@@ -167,6 +174,4 @@ if (len (sys.argv) > 1):
 win = FileShareUI (filename)
 win.connect ("delete-event", Gtk.main_quit)
 win.show_all ()
-
-signal.signal(signal.SIGINT, signal.SIG_DFL)
 Gtk.main ()

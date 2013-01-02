@@ -1,13 +1,32 @@
 
 Todo
- - maybe try to test all the IPs before showing
- - use gupnp to punch NATs, show that IP as  well
+ - use gupnp-igd to punch NATs. If an igd is present, only show that
+   IP by default (maybe add a "share in local network only" option)
+ - maybe try to test all the IPs before showing them ?
+ - try to make informed guesses on what is an "internet" ip and
+   what is in the local network:
+    IANA private networks:
+      10.0.0.0 - 10.255.255.255
+      172.16.0.0 - 172.31.255.255
+      192.168.0.0 - 192.168.255.255
+    IANA carrier grade NAT:
+      100.64.0.0 - 100.127.255.255
+   Alternatively, could just guess that any ipv4 address that is not
+   from gupnp-igd is in the local network...
  - upload functionality (a web form for uploading)
+ - share a whole directory:
+   Probably best to zip/bzip it up (like woof does), but it would be possible to
+   use a directory listing (like soup simple-httpd does)
+     "7z -y -tzip -bd -mx=9 a $TEMPDIR/shared-dir.zip -- shared-dir"
+ - Need a name for this thing...
 
 Possible options to add:
- - manually select interface
-     Not sure when this would be needed...
+ - manually select the interface/IP
+     Not sure when this would be needed.
  - manually select port
-     port should be autoselected, but some ISPs block non-standard ports
- - "stop sharing after 1 download"
- - "share in local network / share on internet" if using gupnp
+     Port should be autoselected, but some ISPs block non-standard ports.
+     Maybe could just try some random ports first, then 8080 and 80?
+     Should add CLI option for port in any case
+ - "stop sharing after a successful download"
+ - "share in local network / share on internet" option if using upnp NAT punching
+
