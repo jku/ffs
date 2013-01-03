@@ -102,11 +102,12 @@ class FancyFileServer (Gtk.Window):
             return 
 
         if (self.shared_content == None):
-            self.shared_content = GLib.file_get_contents (self.shared_file)[1]
-        if (self.shared_content == None):
-            message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
-            print "Internal error: failed to get file contents ({})".format (self.shared_file)
-            return 
+            try:
+                self.shared_content = GLib.file_get_contents (self.shared_file)[1]
+            except:
+                message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
+                print "Internal error: failed to get contents of '{}'".format (self.shared_file)
+                return
 
         message.set_status (Soup.KnownStatusCode.OK)
 
