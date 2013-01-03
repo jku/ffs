@@ -3,8 +3,18 @@
 import os, signal, socket, sys, tempfile
 from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
 
+class IPState:
+    UNKNOWN = 0
+    AVAILABLE = 1
+    UNAVAILABLE = 2
+
+class SharedFileState:
+    BROKEN = 0
+    PREPARING = 1
+    READY = 2
 
 class FancyFileServer (Gtk.Window):
+
     def __init__ (self, files):
         Gtk.Window.__init__ (self, title="Fancy File Server")
         
@@ -17,15 +27,15 @@ class FancyFileServer (Gtk.Window):
         self.shared_file = None
         self.shared_content = None
         self.shared_file_is_temporary = False
-        self.shared_file_state = ""
+        self.shared_file_state = SharedFileState.BROKEN
 
         self.local_ip = None
         self.local_port = None
-        self.local_ip_state = "unknown"
+        self.local_ip_state = IPState.UNKNOWN
 
         self.upnp_ip = None
         self.upnp_port = None
-        self.upnp_ip_state = "unknown"
+        self.upnp_ip_state = IPState.UNKNOWN
 
         self.request_count = 0
         self.request_finished_count = 0
@@ -101,13 +111,13 @@ class FancyFileServer (Gtk.Window):
 
         self.share_button.set_label ("Stop sharing")
 
-        if (self.shared_file_state == "broken"):
+        if (self.shared_file_state == SharedFileState.BROKEN):
             self.sharing_label.set_text ("Failed to share '{}', sorry.".format (GLib.path_get_basename (self.shared_file)))
             self.address_label.set_text ("")
             self.info_label.set_text ("")
             return
 
-        if (self.shared_file_state == "preparing"):
+        if (self.shared_file_state == SharedFileState.PREPARING):
             self.sharing_label.set_text ("Now preparing '{}' for sharing at".format (GLib.path_get_basename (self.shared_file)))
         else:
             self.sharing_label.set_text ("Now Sharing '{}' at".format (GLib.path_get_basename (self.shared_file)))
@@ -164,9 +174,9 @@ class FancyFileServer (Gtk.Window):
 
 
     def on_test_response (self, session, message, is_upnp):
-        state = "unavailable"
+        state = IPState.UNAVAILABLE
         if (message.response_headers.get_one ("server") == self.server_header):
-            state = "available"
+            state = IPState.AVAILABLE
 
         if (is_upnp):
             self.upnp_ip_state = state
@@ -196,24 +206,25 @@ class FancyFileServer (Gtk.Window):
         print "NAT punched at http://{}:{}".format (ext_ip, ext_port)
         self.upnp_ip = ext_ip
         self.upnp_port = ext_port
+        self.upnp_ip_state = IPState.UNKNOWN
         self.confirm_uri (ext_ip, ext_port, True)
 
     def start_sharing (self, files):
         if (len (files) == 0):
-            self.shared_file_state = "broken"
+            self.shared_file_state = SharedFileState.BROKEN
             return
 
         if (len (files) > 1 or GLib.file_test (files[0], GLib.FileTest.IS_DIR)):
             self.shared_file_is_temporary = True
-            self.shared_file_state = "preparing"
+            self.shared_file_state = SharedFileState.PREPARING
             self.shared_file = self.create_temporary_archive (files)
         else:
             self.shared_file_is_temporary = False
-            self.shared_file_state = "ready"
+            self.shared_file_state = SharedFileState.READY
             self.shared_file = files[0]
 
         if (self.shared_file == None):
-            self.shared_file_state = "broken"
+            self.shared_file_state = SharedFileState.BROKEN
             return
 
         self.shared_content = None
@@ -238,7 +249,7 @@ class FancyFileServer (Gtk.Window):
 
 
         # Is URI really available (at least from this machine)?
-        self.local_ip_state = "unknown"
+        self.local_ip_state = IPState.UNKNOWN
         self.confirm_uri (self.local_ip, self.local_port, False)
 
         self.igd = GUPnPIgd.SimpleIgd ()
@@ -263,7 +274,7 @@ class FancyFileServer (Gtk.Window):
 
         self.shared_file = None
         self.shared_content = None
-        self.shared_file_state = ""
+        self.shared_file_state = SharedFileState.BROKEN
 
         if (self.igd):
             self.igd.remove_port ("TCP", self.local_port)
@@ -280,12 +291,12 @@ class FancyFileServer (Gtk.Window):
         GLib.spawn_close_pid (pid)
         wexitstatus = os.WEXITSTATUS (status)
         if (wexitstatus == 0):
-            self.shared_file_state = "ready"
+            self.shared_file_state = SharedFileState.READY
         elif (wexitstatus == 1):
-            self.shared_file_state = "ready"
+            self.shared_file_state = SharedFileState.READY
             print ("7z returned 1 (warning), but created the archive.")
         else:
-            self.shared_file_state = "broken"
+            self.shared_file_state = SharedFileState.BROKEN
             print ( "oops, 7z returned {}".format (wexitstatus))
 
         self.update_ui ()
