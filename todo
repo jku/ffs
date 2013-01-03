@@ -1,9 +1,3 @@
-
-TODO: UPnP
- - If gupnp-igd is used and confirmed, only show that IP by default 
-   (maybe add a "share in local network only" option)
- - figure out why gupnp-igd error signal handler crashes
-
 TODO: UI
  - try to make informed guesses on what is an "internet" ip and
    what is in the local network:
@@ -19,21 +13,20 @@ TODO: UI
     - confirmd upnp (hide local)
     - confirmed local (hide upnp)
     - unconfirmed upnp & unconfirmed local
+   (maybe add a "share in local network only" option)
+
 
 TODO: new features
  - upload functionality (a web form for uploading)
- - share a whole directory:
-   Probably best to zip/bzip it up (like woof does), but it would be possible to
-   use a directory listing (like soup simple-httpd does)
-     "7z -y -tzip -bd -mx=9 a $TEMPDIR/shared-dir.zip -- shared-dir"
+
+TODO: bugs
+ - allow selecting a single directory
+ - gupnp-igd error signal handler crashes
 
 Possible options to add:
- - manually select the interface/IP
-     Not sure when this would be needed.
  - manually select port
      Port should be autoselected, but some ISPs block non-standard ports.
      Maybe could just try some random ports first, then 8080 and 80?
      Should add CLI option for port in any case
- - "stop sharing after a successful download"
- - "share in local network / share on internet" option if using upnp NAT punching
+ - "stop sharing after file has been downloaded"
 
