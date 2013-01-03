@@ -8,16 +8,25 @@ class FancyFileServer (Gtk.Window):
     def __init__ (self, files):
         Gtk.Window.__init__ (self, title="Fancy File Server")
         
-        self.port = 55555;
+        self.default_port = 55555;
         self.server_header = "fancy-file-server"
         self.have_7z = GLib.find_program_in_path ("7z")
+
         self.igd = None
         self.server = None
         self.shared_file = None
         self.shared_content = None
         self.shared_file_is_temporary = False
         self.shared_file_state = ""
+
         self.local_ip = None
+        self.local_port = None
+        self.local_ip_state = "unknown"
+
+        self.upnp_ip = None
+        self.upnp_port = None
+        self.upnp_ip_state = "unknown"
+
         self.request_count = 0
         self.request_finished_count = 0
 
@@ -152,15 +161,20 @@ class FancyFileServer (Gtk.Window):
             message.method == "GET"):
             self.request_finished_count += 1
             self.update_ui ()
-            print "request: finished"
 
 
-    def on_test_response (self, session, message, data):
+    def on_test_response (self, session, message, is_upnp):
+        state = "unavailable"
         if (message.response_headers.get_one ("server") == self.server_header):
-            print "Uri seems to be available"
+            state = "available"
+
+        if (is_upnp):
+            self.upnp_ip_state = state
+        else:
+            self.local_ip_state = state
 
 
-    def confirm_uri (self, ip, port):
+    def confirm_uri (self, ip, port, is_upnp):
         uri = Soup.URI ()
         uri.set_scheme ("http")
         uri.set_host (ip)
@@ -172,15 +186,17 @@ class FancyFileServer (Gtk.Window):
         msg.set_property ("method", "HEAD")
 
         session = Soup.SessionSync ()
-        session.queue_message (msg, self.on_test_response, None)
+        session.queue_message (msg, self.on_test_response, is_upnp)
 
 
     def on_igd_mapped_port (self, igd, proto,
-                            ext_ip, old_ext_ip,
-                            ext_port, local_ip,
-                            desc, data):
+                            ext_ip, old_ext_ip, ext_port,
+                            local_ip, local_port,
+                            desc):
         print "NAT punched at http://{}:{}".format (ext_ip, ext_port)
-        self.confirm_uri (ext_ip, ext_port)
+        self.upnp_ip = ext_ip
+        self.upnp_port = ext_port
+        self.confirm_uri (ext_ip, ext_port, True)
 
     def start_sharing (self, files):
         if (len (files) == 0):
@@ -202,37 +218,39 @@ class FancyFileServer (Gtk.Window):
 
         self.shared_content = None
 
-        self.local_ip = self.find_ip ()
-        self.request_count = 0
-        self.request_finished_count = 0
-
         self.server = GObject.new (Soup.Server,
-                                   port = self.port,
+                                   port = self.default_port,
                                    server_header = self.server_header)
         if (self.server == None):
             # TODO: error?
             return
 
+        self.local_ip = self.find_ip ()
+        self.local_port = self.server.get_port ()
+
+        self.request_count = 0
+        self.request_finished_count = 0
+
         self.server.add_handler (None, self.on_soup_request, None)
         self.server.connect ("request-finished", self.on_soup_request_finished)
-        print "Server starting, guessed uri http://{}:{}".format(self.local_ip, self.server.get_port ())
+        print "Server starting, guessed uri http://{}:{}".format(self.local_ip, self.local_port)
         self.server.run_async ()
 
 
-        # Make sure the URI is really available (at least from this
-        # machine).
-        self.confirm_uri (self.local_ip, self.server.get_port ())
-
-        self.update_ui ()
+        # Is URI really available (at least from this machine)?
+        self.local_ip_state = "unknown"
+        self.confirm_uri (self.local_ip, self.local_port, False)
 
         self.igd = GUPnPIgd.SimpleIgd ()
         self.igd.connect ("mapped-external-port", self.on_igd_mapped_port)
         self.igd.add_port ("TCP",
-                           self.server.get_port (), # remote port
+                           self.local_port, # actually sets remote port
                            self.local_ip,
-                           self.server.get_port (),
+                           self.local_port,
                            0,
                            "my-first-file-server");
+
+        self.update_ui ()
 
 
     def stop_sharing (self):
@@ -248,7 +266,7 @@ class FancyFileServer (Gtk.Window):
         self.shared_file_state = ""
 
         if (self.igd):
-            self.igd.remove_port ("TCP", self.server.get_port ())
+            self.igd.remove_port ("TCP", self.local_port)
             self.igd = None
 
         if (self.server):

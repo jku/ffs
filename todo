@@ -9,6 +9,7 @@ TODO: UI
       100.64.0.0 - 100.127.255.255
    Alternatively, could just guess that any ipv4 address that is not
    from gupnp-igd is in the local network...
+ - show the results of confirm_uri()
  - only show one ip by default normally:
     - confirmd upnp (hide local)
     - confirmed local (hide upnp)
@@ -22,6 +23,7 @@ TODO: new features
 TODO: bugs
  - allow selecting a single directory
  - gupnp-igd error signal handler crashes
+ - confirm_uri() should have a timeout to set state to "unavailable"
 
 Possible options to add:
  - manually select port
