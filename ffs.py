@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import signal, socket, sys
+import os, signal, socket, sys, tempfile
 from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
 
 
@@ -11,6 +11,8 @@ class FancyFileServer (Gtk.Window):
         self.port = 55555;
 
         self.server_header = "fancy-file-server"
+
+        self.have_7z = GLib.find_program_in_path ("7z")
 
         self.set_default_size (400, 200)
 
@@ -155,9 +157,11 @@ class FancyFileServer (Gtk.Window):
         print "NAT punched at http://{}:{}".format (ext_ip, ext_port)
         self.confirm_uri (ext_ip, ext_port)
 
-    def start_sharing (self, filename):
-        self.shared_file = filename 
+    def start_sharing (self, filename, is_temporary):
+        self.shared_file = filename
         self.shared_content = None
+        self.shared_file_is_temporary = is_temporary
+
         self.local_ip = self.find_ip ()
         self.request_count = 0
         self.request_finished_count = 0
@@ -191,6 +195,10 @@ class FancyFileServer (Gtk.Window):
 
 
     def stop_sharing (self):
+        if (self.shared_file_is_temporary):
+            os.remove (self.shared_file);
+            os.rmdir (GLib.path_get_dirname (self.shared_file))
+
         self.shared_file = None
         self.shared_content = None
 
@@ -203,16 +211,40 @@ class FancyFileServer (Gtk.Window):
         self.update_ui()
 
 
+    def create_temporary_archive (self, files):
+        try:
+            temp_dir = tempfile.mkdtemp ("", "ffs-")
+            if (len (files) == 1):
+                archive_name = "{}/{}.zip".format (temp_dir, GLib.path_get_basename (files[0]))
+            else:
+                archive_name = "{}/archive.zip".format (temp_dir)
+
+            cmd = ["7z", 
+                   "-y", "-tzip", "-bd", "-mx=9", 
+                   "a", archive_name,
+                   "--"]
+            GLib.spawn_async (cmd + files, [], temp_dir, GLib.SpawnFlags.SEARCH_PATH);
+            return archive_name
+        except GLib.Error:
+            print "Failed to create a temporary archive"
+            return None
+
     def on_button_clicked (self, widget):
         if (self.shared_file != None):
             self.stop_sharing ()
         else:
-            dialog = Gtk.FileChooserDialog ("Pick a file to share", self,
+            dialog = Gtk.FileChooserDialog ("Select files or folders to share", self,
                                             Gtk.FileChooserAction.OPEN,
                                             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-                                             Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
-            if (dialog.run() == Gtk.ResponseType.OK):
-                self.start_sharing (dialog.get_filename ())
+                                             "Share", Gtk.ResponseType.OK))
+            dialog.set_select_multiple (self.have_7z);
+            if (dialog.run () == Gtk.ResponseType.OK):
+                files = dialog.get_filenames ()
+                if (len (files) > 1 or GLib.file_test (files[0], GLib.FileTest.IS_DIR)):
+                    filename = self.create_temporary_archive (files)
+                    self.start_sharing (filename, True)
+                else:
+                    self.start_sharing (files[0], False)
 
             dialog.destroy()
 
