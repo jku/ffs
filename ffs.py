@@ -199,6 +199,11 @@ class FancyFileServer (Gtk.Window):
         session.queue_message (msg, self.on_test_response, is_upnp)
 
 
+    def on_igd_error (self, igd, err, proto, ep, lip, lp, msg):
+        print "oops"
+        self.upnp_ip_state = IPState.UNAVAILABLE
+
+
     def on_igd_mapped_port (self, igd, proto,
                             ext_ip, old_ext_ip, ext_port,
                             local_ip, local_port,
@@ -208,6 +213,7 @@ class FancyFileServer (Gtk.Window):
         self.upnp_port = ext_port
         self.upnp_ip_state = IPState.UNKNOWN
         self.confirm_uri (ext_ip, ext_port, True)
+
 
     def start_sharing (self, files):
         if (len (files) == 0):
@@ -236,6 +242,9 @@ class FancyFileServer (Gtk.Window):
             # TODO: error?
             return
 
+        self.local_ip_state = IPState.UNKNOWN
+        self.upnp_ip_state = IPState.UNKNOWN
+
         self.local_ip = self.find_ip ()
         self.local_port = self.server.get_port ()
 
@@ -247,19 +256,23 @@ class FancyFileServer (Gtk.Window):
         print "Server starting, guessed uri http://{}:{}".format(self.local_ip, self.local_port)
         self.server.run_async ()
 
-
         # Is URI really available (at least from this machine)?
-        self.local_ip_state = IPState.UNKNOWN
         self.confirm_uri (self.local_ip, self.local_port, False)
 
-        self.igd = GUPnPIgd.SimpleIgd ()
-        self.igd.connect ("mapped-external-port", self.on_igd_mapped_port)
-        self.igd.add_port ("TCP",
-                           self.local_port, # actually sets remote port
-                           self.local_ip,
-                           self.local_port,
-                           0,
-                           "my-first-file-server");
+        try:
+            self.igd = GUPnPIgd.SimpleIgd ()
+            self.igd.connect ("mapped-external-port", self.on_igd_mapped_port)
+            # Broken: python/GI can't cope with signals with GError
+            # self.igd.connect ("error-mapping-port", self.on_igd_error)
+            self.igd.add_port ("TCP",
+                               self.local_port, # actually sets remote port
+                               self.local_ip,
+                               self.local_port,
+                               0,
+                               "my-first-file-server");
+        except:
+            self.upnp_ip_state = IPState.UNAVAILABLE
+            print "Failed to add UPnP port mapping"
 
         self.update_ui ()
 
