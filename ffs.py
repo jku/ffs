@@ -7,12 +7,20 @@ from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
 class FancyFileServer (Gtk.Window):
     def __init__ (self, filename):
         Gtk.Window.__init__ (self, title="Fancy File Server")
-
+        
         self.port = 55555;
-
         self.server_header = "fancy-file-server"
-
         self.have_7z = GLib.find_program_in_path ("7z")
+        self.igd = None
+        self.server = None
+        self.shared_file = None
+        self.shared_content = None
+        self.shared_file_is_temporary = False
+        self.local_ip = None
+        self.request_count = 0
+        self.request_finished_count = 0
+
+        self.connect("delete_event", self.delete_event)
 
         self.set_default_size (400, 200)
 
@@ -42,6 +50,11 @@ class FancyFileServer (Gtk.Window):
 
         if (filename != None):
             self.start_sharing (filename)
+
+
+    def delete_event(self, widget, event, data=None):
+        self.stop_sharing ();
+        return False
 
 
     # Utility function to guess the IP (as a string) where the server can be
@@ -146,7 +159,6 @@ class FancyFileServer (Gtk.Window):
         msg.set_property ("method", "HEAD")
 
         session = Soup.SessionSync ()
-        print "Testing URI {} ...".format (uri.to_string(False))
         session.queue_message (msg, self.on_test_response, None)
 
 
@@ -202,11 +214,13 @@ class FancyFileServer (Gtk.Window):
         self.shared_file = None
         self.shared_content = None
 
-        self.igd.remove_port ("TCP", self.server.get_port ())
-        self.igd = None
+        if (self.igd):
+            self.igd.remove_port ("TCP", self.server.get_port ())
+            self.igd = None
 
-        self.server.disconnect()
-        self.server = None
+        if (self.server):
+            self.server.disconnect()
+            self.server = None
 
         self.update_ui()
 
