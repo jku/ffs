@@ -5,7 +5,7 @@ from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
 
 
 class FancyFileServer (Gtk.Window):
-    def __init__ (self, filename):
+    def __init__ (self, files):
         Gtk.Window.__init__ (self, title="Fancy File Server")
         
         self.port = 55555;
@@ -16,6 +16,7 @@ class FancyFileServer (Gtk.Window):
         self.shared_file = None
         self.shared_content = None
         self.shared_file_is_temporary = False
+        self.shared_file_state = ""
         self.local_ip = None
         self.request_count = 0
         self.request_finished_count = 0
@@ -46,10 +47,10 @@ class FancyFileServer (Gtk.Window):
         vbox.pack_start (self.info_label, False, False, 0)
 
         self.shared_file = None
-        self.update_ui()
+        self.update_ui ()
 
-        if (filename != None):
-            self.start_sharing (filename)
+        if (len (files) > 0):
+            self.start_sharing (files)
 
 
     def delete_event(self, widget, event, data=None):
@@ -87,30 +88,42 @@ class FancyFileServer (Gtk.Window):
             self.sharing_label.set_text ("Currently not sharing anything.")
             self.address_label.set_text ("")
             self.info_label.set_text ("")
+            return
+
+        self.share_button.set_label ("Stop sharing")
+
+        if (self.shared_file_state == "broken"):
+            self.sharing_label.set_text ("Failed to share '{}', sorry.".format (GLib.path_get_basename (self.shared_file)))
+            self.address_label.set_text ("")
+            self.info_label.set_text ("")
+            return
+
+        if (self.shared_file_state == "preparing"):
+            self.sharing_label.set_text ("Now preparing '{}' for sharing at".format (GLib.path_get_basename (self.shared_file)))
         else:
-            self.share_button.set_label ("Stop sharing")
             self.sharing_label.set_text ("Now Sharing '{}' at".format (GLib.path_get_basename (self.shared_file)))
-            self.address_label.set_text ("{}:{}".format (self.local_ip, self.server.get_port()))
-            self.address_label.select_region (0, -1)
-            if (self.request_count == 0):
-                self.info_label.set_text ("It has not been downloaded yet.")
-            elif (self.request_finished_count == 0):
-                self.info_label.set_text ("It is being downloaded now.")
-            elif (self.request_finished_count == self.request_count):
-                if (self.request_finished_count == 1):
-                    self.info_label.set_text ("It has been downloaded once.")
-                else:
-                    self.info_label.set_text ("It has been downloaded {} times.".format (self.request_finished_count))
+        self.address_label.set_text ("{}:{}".format (self.local_ip, self.server.get_port()))
+        self.address_label.select_region (0, -1)
+        if (self.request_count == 0):
+            self.info_label.set_text ("It has not been downloaded yet.")
+        elif (self.request_finished_count == 0):
+            self.info_label.set_text ("It is being downloaded now.")
+        elif (self.request_finished_count == self.request_count):
+            if (self.request_finished_count == 1):
+                self.info_label.set_text ("It has been downloaded once.")
             else:
-                if (self.request_finished_count == 1):
-                    self.info_label.set_text ("It is being downloaded now and has been downloaded once already.")
-                else:
-                    self.info_label.set_text ("It is being downloaded now and has been downloaded {} times already.".format (self.request_finished_count))
+                self.info_label.set_text ("It has been downloaded {} times.".format (self.request_finished_count))
+        else:
+            if (self.request_finished_count == 1):
+                self.info_label.set_text ("It is being downloaded now and has been downloaded once already.")
+            else:
+                self.info_label.set_text ("It is being downloaded now and has been downloaded {} times already.".format (self.request_finished_count))
 
 
     def on_soup_request (self, server, message, path, query, client, wtf_is_this):
         if (message.method != "GET"):
             if (message.method == "HEAD"):
+                # this is for confirm_uri()
                 message.set_status (Soup.KnownStatusCode.OK)
             else:
                 message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
@@ -169,10 +182,25 @@ class FancyFileServer (Gtk.Window):
         print "NAT punched at http://{}:{}".format (ext_ip, ext_port)
         self.confirm_uri (ext_ip, ext_port)
 
-    def start_sharing (self, filename, is_temporary):
-        self.shared_file = filename
+    def start_sharing (self, files):
+        if (len (files) == 0):
+            self.shared_file_state = "broken"
+            return
+
+        if (len (files) > 1 or GLib.file_test (files[0], GLib.FileTest.IS_DIR)):
+            self.shared_file_is_temporary = True
+            self.shared_file_state = "preparing"
+            self.shared_file = self.create_temporary_archive (files)
+        else:
+            self.shared_file_is_temporary = False
+            self.shared_file_state = "ready"
+            self.shared_file = files[0]
+
+        if (self.shared_file == None):
+            self.shared_file_state = "broken"
+            return
+
         self.shared_content = None
-        self.shared_file_is_temporary = is_temporary
 
         self.local_ip = self.find_ip ()
         self.request_count = 0
@@ -182,8 +210,9 @@ class FancyFileServer (Gtk.Window):
                                    port = self.port,
                                    server_header = self.server_header)
         if (self.server == None):
-            print "Failed to start server"
+            # TODO: error?
             return
+
         self.server.add_handler (None, self.on_soup_request, None)
         self.server.connect ("request-finished", self.on_soup_request_finished)
         print "Server starting, guessed uri http://{}:{}".format(self.local_ip, self.server.get_port ())
@@ -194,7 +223,7 @@ class FancyFileServer (Gtk.Window):
         # machine).
         self.confirm_uri (self.local_ip, self.server.get_port ())
 
-        self.update_ui()
+        self.update_ui ()
 
         self.igd = GUPnPIgd.SimpleIgd ()
         self.igd.connect ("mapped-external-port", self.on_igd_mapped_port)
@@ -208,11 +237,15 @@ class FancyFileServer (Gtk.Window):
 
     def stop_sharing (self):
         if (self.shared_file_is_temporary):
-            os.remove (self.shared_file);
-            os.rmdir (GLib.path_get_dirname (self.shared_file))
+            try:
+                os.remove (self.shared_file);
+                os.rmdir (GLib.path_get_dirname (self.shared_file))
+            except :
+                print "Failed to remove temporary file"
 
         self.shared_file = None
         self.shared_content = None
+        self.shared_file_state = ""
 
         if (self.igd):
             self.igd.remove_port ("TCP", self.server.get_port ())
@@ -222,25 +255,43 @@ class FancyFileServer (Gtk.Window):
             self.server.disconnect()
             self.server = None
 
-        self.update_ui()
+        self.update_ui ()
+
+
+    def on_child_process_exit (self, pid, status):
+        GLib.spawn_close_pid (pid)
+        wexitstatus = os.WEXITSTATUS (status)
+        if (wexitstatus == 0):
+            self.shared_file_state = "ready"
+        elif (wexitstatus == 1):
+            self.shared_file_state = "ready"
+            print ("7z returned 1 (warning), but created the archive.")
+        else:
+            self.shared_file_state = "broken"
+            print ( "oops, 7z returned {}".format (wexitstatus))
+
+        self.update_ui ()
 
 
     def create_temporary_archive (self, files):
-        try:
-            temp_dir = tempfile.mkdtemp ("", "ffs-")
-            if (len (files) == 1):
-                archive_name = "{}/{}.zip".format (temp_dir, GLib.path_get_basename (files[0]))
-            else:
-                archive_name = "{}/archive.zip".format (temp_dir)
+        temp_dir = tempfile.mkdtemp ("", "ffs-")
+        if (len (files) == 1):
+            archive_name = "{}/{}.zip".format (temp_dir, GLib.path_get_basename (files[0]))
+        else:
+            archive_name = "{}/archive.zip".format (temp_dir)
 
-            cmd = ["7z", 
-                   "-y", "-tzip", "-bd", "-mx=9", 
-                   "a", archive_name,
-                   "--"]
-            GLib.spawn_async (cmd + files, [], temp_dir, GLib.SpawnFlags.SEARCH_PATH);
+        cmd = ["7z",
+               "-y", "-tzip", "-bd", "-mx=9",
+               "a", archive_name,
+               "--"]
+        flags = GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD | GLib.SpawnFlags.STDOUT_TO_DEV_NULL
+        try:
+            [pid, i, o, e] = GLib.spawn_async (cmd + files, [],
+                                               GLib.get_current_dir (), flags)
+            GLib.child_watch_add (pid, self.on_child_process_exit)
             return archive_name
-        except GLib.Error:
-            print "Failed to create a temporary archive"
+        except GLib.Error as e:
+            print "Failed to spawn 7z: {}".format (e.message)
             return None
 
     def on_button_clicked (self, widget):
@@ -254,22 +305,15 @@ class FancyFileServer (Gtk.Window):
             dialog.set_select_multiple (self.have_7z);
             if (dialog.run () == Gtk.ResponseType.OK):
                 files = dialog.get_filenames ()
-                if (len (files) > 1 or GLib.file_test (files[0], GLib.FileTest.IS_DIR)):
-                    filename = self.create_temporary_archive (files)
-                    self.start_sharing (filename, True)
-                else:
-                    self.start_sharing (files[0], False)
+                self.start_sharing (files)
 
             dialog.destroy()
 
 
+# https://bugzilla.gnome.org/show_bug.cgi?id=622084
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-filename = None
-if (len (sys.argv) > 1):
-    filename = sys.argv[1]
-
-win = FancyFileServer (filename)
+win = FancyFileServer (sys.argv[1:])
 win.connect ("delete-event", Gtk.main_quit)
 win.show_all ()
 Gtk.main ()
