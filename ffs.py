@@ -4,11 +4,13 @@ import signal, socket, sys
 from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
 
 
-class FileShareUI (Gtk.Window):
+class FancyFileServer (Gtk.Window):
     def __init__ (self, filename):
-        Gtk.Window.__init__ (self, title="fileshare-ui")
+        Gtk.Window.__init__ (self, title="Fancy File Server")
 
         self.port = 55555;
+
+        self.server_header = "fancy-file-server"
 
         self.set_default_size (400, 200)
 
@@ -125,7 +127,7 @@ class FileShareUI (Gtk.Window):
 
 
     def on_test_response (self, session, message, data):
-        if (message.response_headers.get_one ("server") == "my-first-file-server"):
+        if (message.response_headers.get_one ("server") == self.server_header):
             print "Uri seems to be available"
 
 
@@ -161,7 +163,7 @@ class FileShareUI (Gtk.Window):
 
         self.server = GObject.new (Soup.Server,
                                    port = self.port,
-                                   server_header = "my-first-file-server")
+                                   server_header = self.server_header)
         if (self.server == None):
             print "Failed to start server"
             return
@@ -220,7 +222,7 @@ filename = None
 if (len (sys.argv) > 1):
     filename = sys.argv[1]
 
-win = FileShareUI (filename)
+win = FancyFileServer (filename)
 win.connect ("delete-event", Gtk.main_quit)
 win.show_all ()
 Gtk.main ()
