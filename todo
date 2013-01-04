@@ -15,17 +15,13 @@ TODO: UI
     - confirmed local (hide upnp)
     - unconfirmed upnp & unconfirmed local
    (maybe add a "share in local network only" option)
-
-
-TODO: new features
- - upload functionality (a web form for uploading)
+ - fix the download counter to show _finished_ downloads
 
 TODO: bugs
  - allow selecting a single directory
  - gupnp-igd error signal handler crashes
  - confirm_uri() should have a timeout to set state to "unavailable"
  - handle SharedFileState.BROKEN in UI
- - handle SharedFileState.PREPARING in request handler
  - handle potential filename clash in on_upload_request()
 
 Possible options to add:

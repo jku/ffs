@@ -30,8 +30,7 @@ class FancyFileServer (Gtk.Window):
         self.shared_file_is_temporary = False
         self.shared_file_state = SharedFileState.BROKEN
 
-        self.request_count = 0
-        self.request_finished_count = 0
+        self.download_count = 0
 
         self.connect("delete_event", self.delete_event)
 
@@ -43,6 +42,10 @@ class FancyFileServer (Gtk.Window):
         vbox = Gtk.VBox (spacing = 12)
         hbox.pack_start (vbox, True, False, 0)
 
+        self.address_label = Gtk.Label ("")
+        self.address_label.set_selectable (True)
+        vbox.pack_start (self.address_label, False, False, 0)
+
         self.share_button = Gtk.Button ()
         self.share_button.connect ("clicked", self.on_button_clicked)
         vbox.pack_start(self.share_button, False, False, 0)
@@ -50,10 +53,6 @@ class FancyFileServer (Gtk.Window):
         self.sharing_label = Gtk.Label ("")
         self.sharing_label.set_ellipsize (Pango.EllipsizeMode.END)
         vbox.pack_start (self.sharing_label, False, False, 0)
-
-        self.address_label = Gtk.Label ("")
-        self.address_label.set_selectable (True)
-        vbox.pack_start (self.address_label, False, False, 0)
 
         self.info_label = Gtk.Label ("")
         vbox.pack_start (self.info_label, False, False, 0)
@@ -104,9 +103,7 @@ class FancyFileServer (Gtk.Window):
 
         self.local_ip = self.find_ip ()
         self.local_port = self.server.get_port ()
-        self.server.add_handler (None, self.on_download_request, None)
-        self.server.add_handler ("/u", self.on_upload_request, None)
-        self.server.connect ("request-finished", self.on_soup_request_finished)
+        self.server.add_handler (None, self.on_soup_request, None)
         print "Server starting, guessed uri http://%s:%d" % (self.local_ip, self.local_port)
         self.server.run_async ()
 
@@ -164,10 +161,15 @@ class FancyFileServer (Gtk.Window):
 
 
     def update_ui (self):
+        if (self.upnp_ip_state == IPState.AVAILABLE):
+            self.address_label.set_text ("%s:%d" % (self.upnp_ip, self.upnp_port))
+        else:
+            self.address_label.set_text ("%s:%d" % (self.local_ip, self.local_port))
+        self.address_label.select_region (0, -1)
+
         if (self.shared_file == None):
-            self.share_button.set_label ("Share a file")
-            self.sharing_label.set_text ("Currently not sharing anything.")
-            self.address_label.set_text ("")
+            self.share_button.set_label ("Share files")
+            self.sharing_label.set_text ("Currently sharing nothing.")
             self.info_label.set_text ("")
             return
 
@@ -175,105 +177,130 @@ class FancyFileServer (Gtk.Window):
 
         if (self.shared_file_state == SharedFileState.BROKEN):
             self.sharing_label.set_text ("Failed to share '%s', sorry." % GLib.path_get_basename (self.shared_file))
-            self.address_label.set_text ("")
             self.info_label.set_text ("")
             return
 
         if (self.shared_file_state == SharedFileState.PREPARING):
-            self.sharing_label.set_text ("Now preparing '%s' for sharing at" % GLib.path_get_basename (self.shared_file))
+            self.sharing_label.set_text ("Now preparing '%s' for sharing" % GLib.path_get_basename (self.shared_file))
         else:
-            self.sharing_label.set_text ("Now Sharing '%s' at" % GLib.path_get_basename (self.shared_file))
-        self.address_label.set_text ("%s:%d" % (self.local_ip, self.server.get_port()))
-        self.address_label.select_region (0, -1)
-        if (self.request_count == 0):
-            self.info_label.set_text ("It has not been downloaded yet.")
-        elif (self.request_finished_count == 0):
-            self.info_label.set_text ("It is being downloaded now.")
-        elif (self.request_finished_count == self.request_count):
-            if (self.request_finished_count == 1):
-                self.info_label.set_text ("It has been downloaded once.")
-            else:
-                self.info_label.set_text ("It has been downloaded %d times." % self.request_finished_count)
+            self.sharing_label.set_text ("Now Sharing '%s'" % GLib.path_get_basename (self.shared_file))
+        if (self.download_count == 0):
+            self.info_label.set_text ("No downloads so far.")
+        elif (self.download_count == 1):
+            self.info_label.set_text ("One download so far.")
         else:
-            if (self.request_finished_count == 1):
-                self.info_label.set_text ("It is being downloaded now and has been downloaded once already.")
-            else:
-                self.info_label.set_text ("It is being downloaded now and has been downloaded %d times already." % self.request_finished_count)
+            self.info_label.set_text ("%d downloads so far." % self.download_count)
 
-    def get_upload_form (self):
+
+    def get_form (self):
+
+        upload_part = ""
+        download_part = "<h2>No downloads right now</h2>"
+
+        if (self.allow_upload):
+            upload_part = """<h2>You can upload files</h2>
+<p><form action="/" enctype="multipart/form-data" method="post">
+<input type="file" name="file" size="20">
+<input type="submit" value="Send">
+</form></p>"""
+
+        if (self.shared_file and self.shared_file_state != SharedFileState.BROKEN):
+            download_part = """<h2>A file is available for download</h2>
+<p><a href="/1">%s</a></p>""" % GLib.path_get_basename (self.shared_file)
+
         form = """<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
 <html>
-<head><title>Friendly File Uploader</title><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" /></head>
-<body><h1>Hello, please upload a file</h1>
-<form action="/u" enctype="multipart/form-data" method="post">
-<input type="file" name="file" size="40">
-<input type="submit" value="Send">
-</form>
+<head><title>Friendly File Server</title><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" /></head>
+<body>
+<h1>Hello, this is a Friendly File Server</h1>
+%s
+%s
 </body>
-</html>"""
+</html>""" % (upload_part, download_part)
         return form
 
-    def header_print (self, name, value, data):
-        print name, value
+    def get_preparing_page (self):
+        return """<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
+<html>
+<head><title>Friendly File Server</title><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" /></head>
+<body>
+<h1>Oops</h1>
+<p>The file is still being prepared. Please try again in a moment.</p>
+</body>
+</html>"""
 
-    def on_upload_request (self, server, message, path, query, client, wtf_is_this):
-        if (message.method != "GET" and message.method != "HEAD" and message.method != "POST"):
-            message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
-            return 
 
-        if (path != "/u"):
-            message.set_status (Soup.KnownStatusCode.NOT_FOUND)
-            return
-
-        if (message.method == "POST"):
-            # upload coming through ...
-            
-            mp = Soup.Multipart.new_from_message (message.request_headers,
-                                                  message.request_body)
-            [has_part, header, body] = mp.get_part (0)
-            if (not has_part):
-                message.set_status (Soup.KnownStatusCode.BAD_REQUEST)
-                # TODO: error message
-                return
-
-            [has_cd, cd, params] = header.get_content_disposition ()
-
-            basename = params["filename"]
-            path = GLib.get_user_special_dir (GLib.UserDirectory.DIRECTORY_DOWNLOAD)
-
-            if (basename == None):
-                filename = "%s/uploaded_file" % path
+    def on_soup_request (self, server, message, path, query, client, data):
+        if (path == "/"):
+            if (message.method == "GET" or message.method == "HEAD"):
+                self.handle_form_request (message)
+            elif (message.method == "POST"):
+                self.handle_upload_request (message)
             else:
-                filename = "%s/%s" % (path, basename)
+                message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
+        else:
+            if (message.method == "GET" or message.method == "HEAD"):
+                self.handle_download_request (message, path)
+            else:
+                message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
 
-            # TODO fix file name clash
 
-            try:
-                with open(filename, "w") as f:
-                    f.write (body.get_data ())
-                message.set_status (Soup.KnownStatusCode.OK)
-            except:
-                print "Attempted upload failed"
-                message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
-            return
-
-        # method is GET or HEAD, return the upload form
-        form = self.get_upload_form ()
+    def handle_form_request (self, message):
+        form = self.get_form ()
         message.set_response ("text/html", Soup.MemoryUse.COPY, form)
         message.set_status (Soup.KnownStatusCode.OK)
 
 
-    def on_download_request (self, server, message, path, query, client, wtf_is_this):
-        if (message.method != "GET" and message.method != "HEAD"):
-            message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
-            return 
+    def handle_upload_request (self, message):
+        if (not self.allow_upload):
+            message.set_status (Soup.KnownStatusCode.FORBIDDEN)
+            # TODO: error message
+            return
 
-        if (self.shared_file == None or path != "/"):
+        mp = Soup.Multipart.new_from_message (message.request_headers,
+                                              message.request_body)
+        [has_part, header, body] = mp.get_part (0)
+        if (not has_part):
+            message.set_status (Soup.KnownStatusCode.BAD_REQUEST)
+            # TODO: error message
+            return
+
+        [has_cd, cd, params] = header.get_content_disposition ()
+
+        basename = params["filename"]
+        path = GLib.get_user_special_dir (GLib.UserDirectory.DIRECTORY_DOWNLOAD)
+
+        if (basename == None):
+            filename = "%s/uploaded_file" % path
+        else:
+            filename = "%s/%s" % (path, basename)
+
+        # TODO fix file name clash
+
+        try:
+            with open(filename, "w") as f:
+                f.write (body.get_data ())
+            message.set_status (Soup.KnownStatusCode.OK)
+        except:
+            print "Attempted upload failed"
+            message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
+
+
+    def handle_download_request (self, message, path):
+        # could handle multiple files here ...
+        if (path != "/1"):
             message.set_status (Soup.KnownStatusCode.NOT_FOUND)
+            # TODO: error message
+            return
+
+        if (self.shared_file_state == SharedFileState.PREPARING):
+            page = self.get_preparing_page ()
+            message.set_response ("text/html", Soup.MemoryUse.COPY, page)
+            message.set_status (Soup.KnownStatusCode.ACCEPTED)
             return
 
         if (message.method == "HEAD"):
-            # this is for confirm_uri() mostly
+            # avoid loading the file just for confirm_url()
             message.set_status (Soup.KnownStatusCode.OK)
             return
 
@@ -293,15 +320,8 @@ class FancyFileServer (Gtk.Window):
         message.response_headers.set_content_disposition ("attachment", attachment)
         message.response_body.append_buffer (Soup.Buffer.new (self.shared_content))
 
-        self.request_count += 1
+        self.download_count += 1
         self.update_ui ()
-
-
-    def on_soup_request_finished (self, server, message, client):
-        if (message.status_code == Soup.KnownStatusCode.OK and
-            message.method == "GET"):
-            self.request_finished_count += 1
-            self.update_ui ()
 
 
     def on_test_response (self, session, message, is_upnp):
@@ -313,6 +333,8 @@ class FancyFileServer (Gtk.Window):
             self.upnp_ip_state = state
         else:
             self.local_ip_state = state
+
+        self.update_ui ()
 
 
     def confirm_uri (self, ip, port, is_upnp):
@@ -364,8 +386,7 @@ class FancyFileServer (Gtk.Window):
             return
 
         self.shared_content = None
-        self.request_count = 0
-        self.request_finished_count = 0
+        self.download_count = 0
 
         self.update_ui ()
 
