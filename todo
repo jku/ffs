@@ -30,6 +30,5 @@ Possible options to add:
  - manually select port
      Port should be autoselected, but some ISPs block non-standard ports.
      Maybe could just try some random ports first, then 8080 and 80?
-     Should add CLI option for port in any case
  - "stop sharing after file has been downloaded"
 

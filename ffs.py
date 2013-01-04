@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, signal, socket, sys, tempfile
+import argparse, os, signal, socket, sys, tempfile
 from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
 
 class IPState:
@@ -15,10 +15,10 @@ class SharedFileState:
 
 class FancyFileServer (Gtk.Window):
 
-    def __init__ (self, files):
+    def __init__ (self, files, port):
         Gtk.Window.__init__ (self, title = "Fancy File Server")
         
-        self.default_port = 55555
+        self.config_port = port
         self.server_header = "fancy-file-server"
         self.have_7z = GLib.find_program_in_path ("7z")
 
@@ -241,7 +241,7 @@ class FancyFileServer (Gtk.Window):
         self.shared_content = None
 
         self.server = GObject.new (Soup.Server,
-                                   port = self.default_port,
+                                   port = self.config_port,
                                    server_header = self.server_header)
         if (self.server == None):
             # TODO: error?
@@ -355,10 +355,25 @@ class FancyFileServer (Gtk.Window):
             dialog.destroy()
 
 
+def ensure_positive (value):
+    try:
+        v = int (value)
+    except Exception:
+        raise argparse.ArgumentTypeError("Port must be a positive integer")
+    if (v < 0):
+        raise argparse.ArgumentTypeError("Port must be a positive integer")
+    return v
+
+
 # https://bugzilla.gnome.org/show_bug.cgi?id=622084
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-win = FancyFileServer (sys.argv[1:])
+parser = argparse.ArgumentParser(description="Share files on the internet.")
+parser.add_argument ("file", nargs = "*", help="file that should be shared")
+parser.add_argument ("-p", "--port", type = ensure_positive, default = 0)
+args = parser.parse_args ()
+
+win = FancyFileServer (args.file, args.port)
 win.connect ("delete-event", Gtk.main_quit)
 win.show_all ()
 Gtk.main ()
