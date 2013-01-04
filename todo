@@ -25,6 +25,8 @@ TODO: bugs
  - gupnp-igd error signal handler crashes
  - confirm_uri() should have a timeout to set state to "unavailable"
  - handle SharedFileState.BROKEN in UI
+ - handle SharedFileState.PREPARING in request handler
+ - handle potential filename clash in on_upload_request()
 
 Possible options to add:
  - manually select port

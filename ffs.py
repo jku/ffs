@@ -15,7 +15,7 @@ class SharedFileState:
 
 class FancyFileServer (Gtk.Window):
 
-    def __init__ (self, files, port):
+    def __init__ (self, files, port, allow_uploads):
         Gtk.Window.__init__ (self, title = "Fancy File Server")
         
         self.config_port = port
@@ -23,7 +23,7 @@ class FancyFileServer (Gtk.Window):
         self.have_7z = GLib.find_program_in_path ("7z")
 
         self.igd = None
-        self.allow_upload = False
+        self.allow_upload = allow_uploads
 
         self.shared_file = None
         self.shared_content = None
@@ -58,11 +58,15 @@ class FancyFileServer (Gtk.Window):
         self.info_label = Gtk.Label ("")
         vbox.pack_start (self.info_label, False, False, 0)
 
-        self.info_label = Gtk.Label ("")
-        vbox.pack_start (self.info_label, False, False, 0)
+        hbox = Gtk.HBox (spacing = 6)
+        vbox.pack_start (hbox, False, False, 0)
+
+        label = Gtk.Label ("Allow uploads:")
+        hbox.pack_start (label, False, False, 0)
 
         self.upload_switch = Gtk.Switch ()
-        vbox.pack_start (self.upload_switch, False, False, 0)
+        self.upload_switch.set_active (self.allow_upload)
+        hbox.pack_start (self.upload_switch, False, False, 0)
         self.upload_switch.connect ("notify::active", self.on_upload_switch_notify)
 
         self.start_server ()
@@ -100,7 +104,8 @@ class FancyFileServer (Gtk.Window):
 
         self.local_ip = self.find_ip ()
         self.local_port = self.server.get_port ()
-        self.server.add_handler (None, self.on_soup_request, None)
+        self.server.add_handler (None, self.on_download_request, None)
+        self.server.add_handler ("/u", self.on_upload_request, None)
         self.server.connect ("request-finished", self.on_soup_request_finished)
         print "Server starting, guessed uri http://%s:%d" % (self.local_ip, self.local_port)
         self.server.run_async ()
@@ -195,13 +200,75 @@ class FancyFileServer (Gtk.Window):
             else:
                 self.info_label.set_text ("It is being downloaded now and has been downloaded %d times already." % self.request_finished_count)
 
+    def get_upload_form (self):
+        form = """<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
+<html>
+<head><title>Friendly File Uploader</title><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" /></head>
+<body><h1>Hello, please upload a file</h1>
+<form action="/u" enctype="multipart/form-data" method="post">
+<input type="file" name="file" size="40">
+<input type="submit" value="Send">
+</form>
+</body>
+</html>"""
+        return form
 
-    def on_soup_request (self, server, message, path, query, client, wtf_is_this):
+    def header_print (self, name, value, data):
+        print name, value
+
+    def on_upload_request (self, server, message, path, query, client, wtf_is_this):
+        if (message.method != "GET" and message.method != "HEAD" and message.method != "POST"):
+            message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
+            return 
+
+        if (path != "/u"):
+            message.set_status (Soup.KnownStatusCode.NOT_FOUND)
+            return
+
+        if (message.method == "POST"):
+            # upload coming through ...
+            
+            mp = Soup.Multipart.new_from_message (message.request_headers,
+                                                  message.request_body)
+            [has_part, header, body] = mp.get_part (0)
+            if (not has_part):
+                message.set_status (Soup.KnownStatusCode.BAD_REQUEST)
+                # TODO: error message
+                return
+
+            [has_cd, cd, params] = header.get_content_disposition ()
+
+            basename = params["filename"]
+            path = GLib.get_user_special_dir (GLib.UserDirectory.DIRECTORY_DOWNLOAD)
+
+            if (basename == None):
+                filename = "%s/uploaded_file" % path
+            else:
+                filename = "%s/%s" % (path, basename)
+
+            # TODO fix file name clash
+
+            try:
+                with open(filename, "w") as f:
+                    f.write (body.get_data ())
+                message.set_status (Soup.KnownStatusCode.OK)
+            except:
+                print "Attempted upload failed"
+                message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
+            return
+
+        # method is GET or HEAD, return the upload form
+        form = self.get_upload_form ()
+        message.set_response ("text/html", Soup.MemoryUse.COPY, form)
+        message.set_status (Soup.KnownStatusCode.OK)
+
+
+    def on_download_request (self, server, message, path, query, client, wtf_is_this):
         if (message.method != "GET" and message.method != "HEAD"):
             message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
             return 
 
-        if (self.shared_file == None):
+        if (self.shared_file == None or path != "/"):
             message.set_status (Soup.KnownStatusCode.NOT_FOUND)
             return
 
@@ -220,7 +287,6 @@ class FancyFileServer (Gtk.Window):
                 self.update_ui ()
                 return
 
-        print "req"
         message.set_status (Soup.KnownStatusCode.OK)
 
         attachment = {"filename": GLib.path_get_basename (self.shared_file)}
@@ -265,7 +331,7 @@ class FancyFileServer (Gtk.Window):
 
 
     def on_igd_error (self, igd, err, proto, ep, lip, lp, msg):
-        print "oops"
+        print "UPnP port forwarding failed"
         self.upnp_ip_state = IPState.UNAVAILABLE
 
 
@@ -386,9 +452,10 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 parser = argparse.ArgumentParser(description="Share files on the internet.")
 parser.add_argument ("file", nargs = "*", help="file that should be shared")
 parser.add_argument ("-p", "--port", type = ensure_positive, default = 0)
+parser.add_argument ("-u", "--allow-uploads", action = "store_true")
 args = parser.parse_args ()
 
-win = FancyFileServer (args.file, args.port)
+win = FancyFileServer (args.file, args.port, args.allow_uploads)
 win.connect ("delete-event", Gtk.main_quit)
 win.show_all ()
 Gtk.main ()
