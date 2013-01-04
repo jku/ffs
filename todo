@@ -24,6 +24,7 @@ TODO: bugs
  - allow selecting a single directory
  - gupnp-igd error signal handler crashes
  - confirm_uri() should have a timeout to set state to "unavailable"
+ - handle SharedFileState.BROKEN in UI
 
 Possible options to add:
  - manually select port

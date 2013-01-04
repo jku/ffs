@@ -16,9 +16,9 @@ class SharedFileState:
 class FancyFileServer (Gtk.Window):
 
     def __init__ (self, files):
-        Gtk.Window.__init__ (self, title="Fancy File Server")
+        Gtk.Window.__init__ (self, title = "Fancy File Server")
         
-        self.default_port = 55555;
+        self.default_port = 55555
         self.server_header = "fancy-file-server"
         self.have_7z = GLib.find_program_in_path ("7z")
 
@@ -44,10 +44,10 @@ class FancyFileServer (Gtk.Window):
 
         self.set_default_size (400, 200)
 
-        hbox = Gtk.HBox (spacing=6)
+        hbox = Gtk.HBox (spacing = 6)
         self.add (hbox)
 
-        vbox = Gtk.VBox (spacing=12)
+        vbox = Gtk.VBox (spacing = 12)
         hbox.pack_start (vbox, True, False, 0)
 
         self.share_button = Gtk.Button ()
@@ -72,8 +72,8 @@ class FancyFileServer (Gtk.Window):
             self.start_sharing (files)
 
 
-    def delete_event(self, widget, event, data=None):
-        self.stop_sharing ();
+    def delete_event(self, widget, event, data = None):
+        self.stop_sharing ()
         return False
 
 
@@ -112,16 +112,16 @@ class FancyFileServer (Gtk.Window):
         self.share_button.set_label ("Stop sharing")
 
         if (self.shared_file_state == SharedFileState.BROKEN):
-            self.sharing_label.set_text ("Failed to share '{}', sorry.".format (GLib.path_get_basename (self.shared_file)))
+            self.sharing_label.set_text ("Failed to share '%s', sorry." % GLib.path_get_basename (self.shared_file))
             self.address_label.set_text ("")
             self.info_label.set_text ("")
             return
 
         if (self.shared_file_state == SharedFileState.PREPARING):
-            self.sharing_label.set_text ("Now preparing '{}' for sharing at".format (GLib.path_get_basename (self.shared_file)))
+            self.sharing_label.set_text ("Now preparing '%s' for sharing at" % GLib.path_get_basename (self.shared_file))
         else:
-            self.sharing_label.set_text ("Now Sharing '{}' at".format (GLib.path_get_basename (self.shared_file)))
-        self.address_label.set_text ("{}:{}".format (self.local_ip, self.server.get_port()))
+            self.sharing_label.set_text ("Now Sharing '%s' at" % GLib.path_get_basename (self.shared_file))
+        self.address_label.set_text ("%s:%d" % (self.local_ip, self.server.get_port()))
         self.address_label.select_region (0, -1)
         if (self.request_count == 0):
             self.info_label.set_text ("It has not been downloaded yet.")
@@ -131,12 +131,12 @@ class FancyFileServer (Gtk.Window):
             if (self.request_finished_count == 1):
                 self.info_label.set_text ("It has been downloaded once.")
             else:
-                self.info_label.set_text ("It has been downloaded {} times.".format (self.request_finished_count))
+                self.info_label.set_text ("It has been downloaded %d times." % self.request_finished_count)
         else:
             if (self.request_finished_count == 1):
                 self.info_label.set_text ("It is being downloaded now and has been downloaded once already.")
             else:
-                self.info_label.set_text ("It is being downloaded now and has been downloaded {} times already.".format (self.request_finished_count))
+                self.info_label.set_text ("It is being downloaded now and has been downloaded %d times already." % self.request_finished_count)
 
 
     def on_soup_request (self, server, message, path, query, client, wtf_is_this):
@@ -152,8 +152,10 @@ class FancyFileServer (Gtk.Window):
             try:
                 self.shared_content = GLib.file_get_contents (self.shared_file)[1]
             except:
+                print "Failed to get contents of '%s' while handling request." % self.shared_file
                 message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
-                print "Internal error: failed to get contents of '{}'".format (self.shared_file)
+                self.shared_file_state = SharedFileState.BROKEN
+                self.update_ui ()
                 return
 
         message.set_status (Soup.KnownStatusCode.OK)
@@ -208,7 +210,7 @@ class FancyFileServer (Gtk.Window):
                             ext_ip, old_ext_ip, ext_port,
                             local_ip, local_port,
                             desc):
-        print "NAT punched at http://{}:{}".format (ext_ip, ext_port)
+        print "NAT punched at http://%s:%d" % (ext_ip, ext_port)
         self.upnp_ip = ext_ip
         self.upnp_port = ext_port
         self.upnp_ip_state = IPState.UNKNOWN
@@ -216,6 +218,9 @@ class FancyFileServer (Gtk.Window):
 
 
     def start_sharing (self, files):
+        if (self.shared_file != None):
+            self.stop_sharing ()
+
         if (len (files) == 0):
             self.shared_file_state = SharedFileState.BROKEN
             return
@@ -253,7 +258,7 @@ class FancyFileServer (Gtk.Window):
 
         self.server.add_handler (None, self.on_soup_request, None)
         self.server.connect ("request-finished", self.on_soup_request_finished)
-        print "Server starting, guessed uri http://{}:{}".format(self.local_ip, self.local_port)
+        print "Server starting, guessed uri http://%s:%d" % (self.local_ip, self.local_port)
         self.server.run_async ()
 
         # Is URI really available (at least from this machine)?
@@ -265,11 +270,9 @@ class FancyFileServer (Gtk.Window):
             # Broken: python/GI can't cope with signals with GError
             # self.igd.connect ("error-mapping-port", self.on_igd_error)
             self.igd.add_port ("TCP",
-                               self.local_port, # actually sets remote port
-                               self.local_ip,
-                               self.local_port,
-                               0,
-                               "my-first-file-server");
+                               self.local_port, # remote port really
+                               self.local_ip, self.local_port,
+                               0, "my-first-file-server")
         except:
             self.upnp_ip_state = IPState.UNAVAILABLE
             print "Failed to add UPnP port mapping"
@@ -280,7 +283,7 @@ class FancyFileServer (Gtk.Window):
     def stop_sharing (self):
         if (self.shared_file_is_temporary):
             try:
-                os.remove (self.shared_file);
+                os.remove (self.shared_file)
                 os.rmdir (GLib.path_get_dirname (self.shared_file))
             except :
                 print "Failed to remove temporary file"
@@ -310,7 +313,7 @@ class FancyFileServer (Gtk.Window):
             print ("7z returned 1 (warning), but created the archive.")
         else:
             self.shared_file_state = SharedFileState.BROKEN
-            print ( "oops, 7z returned {}".format (wexitstatus))
+            print ("oops, 7z returned %s" % wexitstatus)
 
         self.update_ui ()
 
@@ -318,9 +321,9 @@ class FancyFileServer (Gtk.Window):
     def create_temporary_archive (self, files):
         temp_dir = tempfile.mkdtemp ("", "ffs-")
         if (len (files) == 1):
-            archive_name = "{}/{}.zip".format (temp_dir, GLib.path_get_basename (files[0]))
+            archive_name = "%s/%s.zip" % (temp_dir, GLib.path_get_basename (files[0]))
         else:
-            archive_name = "{}/archive.zip".format (temp_dir)
+            archive_name = "%s/archive.zip" % temp_dir
 
         cmd = ["7z",
                "-y", "-tzip", "-bd", "-mx=9",
@@ -333,7 +336,7 @@ class FancyFileServer (Gtk.Window):
             GLib.child_watch_add (pid, self.on_child_process_exit)
             return archive_name
         except GLib.Error as e:
-            print "Failed to spawn 7z: {}".format (e.message)
+            print "Failed to spawn 7z: %s" % e.message
             return None
 
     def on_button_clicked (self, widget):
@@ -344,7 +347,7 @@ class FancyFileServer (Gtk.Window):
                                             Gtk.FileChooserAction.OPEN,
                                             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
                                              "Share", Gtk.ResponseType.OK))
-            dialog.set_select_multiple (self.have_7z);
+            dialog.set_select_multiple (self.have_7z)
             if (dialog.run () == Gtk.ResponseType.OK):
                 files = dialog.get_filenames ()
                 self.start_sharing (files)
