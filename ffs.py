@@ -97,11 +97,11 @@ class FancyFileServer (Gtk.Window):
         Gtk.Window.__init__ (self, title = "Fancy File Server")
         
         self.config_port = port
+        self.allow_upload = allow_uploads
         self.server_header = "fancy-file-server"
         self.have_7z = GLib.find_program_in_path ("7z")
 
-        self.igd = None
-        self.allow_upload = allow_uploads
+        self.out_7z = None
 
         self.shared_file = None
         self.shared_file_is_temporary = False
@@ -167,6 +167,8 @@ class FancyFileServer (Gtk.Window):
         self.upnp_ip = None
         self.upnp_port = None
         self.upnp_ip_state = IPState.UNKNOWN
+
+        self.igd = None
 
         try:
             self.server = GObject.new (Soup.Server,
@@ -429,17 +431,28 @@ class FancyFileServer (Gtk.Window):
 
 
     def on_child_process_exit (self, pid, status):
-        GLib.spawn_close_pid (pid)
+        should_print = True
         wexitstatus = os.WEXITSTATUS (status)
         if (wexitstatus == 0):
             self.shared_file_state = SharedFileState.READY
+            should_print = False
         elif (wexitstatus == 1):
+            # warning
             self.shared_file_state = SharedFileState.READY
-            print ("7z returned 1 (warning), but created the archive.")
         else:
+            # error
             self.shared_file_state = SharedFileState.BROKEN
-            print ("oops, 7z returned %s" % wexitstatus)
 
+        if (should_print):
+            print ("7z returned %s, printing full output:"
+                   % wexitstatus)
+            line = self.out_7z.readline ()
+            while (line):
+                sys.stdout.write(" | " + line)
+                line = self.out_7z.readline ()
+
+        GLib.spawn_close_pid (pid)
+        self.out_7z = None
         self.update_ui ()
 
 
@@ -456,14 +469,18 @@ class FancyFileServer (Gtk.Window):
                ]
         flags = GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD
         try:
-            [pid, i, o, e] = GLib.spawn_async (cmd + files, [],
-                                               GLib.get_current_dir (),
-                                               flags, None, None,
-                                               False, True, True)
-            GLib.child_watch_add (pid, self.on_child_process_exit)
+            result = GLib.spawn_async (cmd + files, [],
+                                       GLib.get_current_dir (),
+                                       flags, None, None,
+                                       False, True, False)
+            self.out_7z = GLib.IOChannel (result[2])
+            self.out_7z.set_close_on_unref (True)
+            GLib.child_watch_add (result[0], self.on_child_process_exit)
             return archive_name
         except GLib.Error as e:
             print "Failed to spawn 7z: %s" % e.message
+            return None
+        except e:
             return None
 
 
