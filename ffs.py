@@ -168,11 +168,12 @@ class FancyFileServer (Gtk.Window):
         self.upnp_port = None
         self.upnp_ip_state = IPState.UNKNOWN
 
-        self.server = GObject.new (Soup.Server,
-                                   port = self.config_port,
-                                   server_header = self.server_header)
-        if (self.server == None):
-            # TODO: error?
+        try:
+            self.server = GObject.new (Soup.Server,
+                                    port = self.config_port,
+                                    server_header = self.server_header)
+        except:
+            self.server = None
             return
 
         self.local_ip = find_ip ()
@@ -211,11 +212,22 @@ class FancyFileServer (Gtk.Window):
 
 
     def update_ui (self):
+        if (self.server == None):
+            self.share_button.set_label ("Share files")
+            if (self.config_port == 0):
+                self.sharing_label.set_text ("Failed to start the web server.")
+            else:
+                self.sharing_label.set_text ("Failed to start the web server on port %d."
+                                             % self.config_port)
+            self.set_sensitive (False)
+            return
+
         if (self.upnp_ip_state == IPState.AVAILABLE):
             self.address_label.set_text ("%s:%d" % (self.upnp_ip, self.upnp_port))
         else:
             self.address_label.set_text ("%s:%d" % (self.local_ip, self.local_port))
         self.address_label.select_region (0, -1)
+
 
         if (self.shared_file == None):
             self.share_button.set_label ("Share files")
