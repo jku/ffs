@@ -213,10 +213,10 @@ class FancyFileServer (Gtk.Window):
             prepare_info = "(archive is being prepared, try again soon)"
 
         if (self.allow_upload):
-            upload_part = """<h2>You can upload files</h2>
+            upload_part = """<h2>You can upload a file</h2>
 <p><form action="/" enctype="multipart/form-data" method="post">
 <input type="file" name="file" size="20">
-<input type="submit" value="Send">
+<input type="submit" value="Upload">
 </form>%s</p>""" % upload_info_part
 
         if (self.shared_file and self.shared_file_state != SharedFileState.BROKEN):
@@ -278,14 +278,16 @@ class FancyFileServer (Gtk.Window):
         path = GLib.get_user_special_dir (GLib.UserDirectory.DIRECTORY_DOWNLOAD)
 
         if (basename == None):
-            filename = "%s/uploaded_file" % path
-        else:
-            filename = "%s/%s" % (path, basename)
-
-        # TODO fix file name clash
+            basename = "Upload"
+        full_filename = "%s/%s" % (path, basename)
+        [filename, extension] = os.path.splitext (full_filename)
+        i = 1
+        while (GLib.file_test (full_filename, GLib.FileTest.EXISTS)):
+            i += 1
+            full_filename = "%s(%d)%s" % (filename, i, extension)
 
         try:
-            with open (filename, "w") as f:
+            with open (full_filename, "w") as f:
                 f.write (body.get_data ())
             self.reply_request (message, Soup.KnownStatusCode.OK, FormInfo.UPLOAD_SUCCEEDED)
         except:
