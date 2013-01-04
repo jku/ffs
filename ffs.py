@@ -24,6 +24,73 @@ class SharedFileState:
     PREPARING = 1
     READY = 2
 
+# Utility function to guess the IP (as a string) where the server can be
+# reached from the outside. Quite nasty problem actually.
+# Copied from http://www.home.unix-ag.org/simon/woof, GPL 2+
+def find_ip ():
+    # we get a UDP-socket for the TEST-networks reserved by IANA.
+    # It is highly unlikely, that there is special routing used
+    # for these networks, hence the socket later should give us
+    # the ip address of the default route.
+    # We're doing multiple tests, to guard against the computer being
+    # part of a test installation.
+    candidates = []
+    for test_ip in ["192.0.2.0", "198.51.100.0", "203.0.113.0"]:
+        s = socket.socket (socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect ((test_ip, 80))
+        ip_addr = s.getsockname ()[0]
+        s.close ()
+        if ip_addr in candidates:
+            return ip_addr
+        candidates.append (ip_addr)
+    return candidates[0]
+
+
+def get_form (allow_upload, form_info, shared_file_state, shared_file):
+    upload_info_part = "<br>"
+    upload_part = ""
+    download_info_part = "<br>"
+    prepare_info = ""
+    download_part = "<h2>No downloads are available</h2>"
+
+    if (form_info == FormInfo.UPLOAD_SUCCEEDED):
+        upload_info_part = "Your file was uploaded succesfully."
+    elif (form_info == FormInfo.UPLOAD_FAILED):
+        upload_info_part = "Your upload failed."
+    elif (form_info == FormInfo.DOWNLOAD_NOT_FOUND):
+        download_info_part = "That file you requested does not seem to exist."
+    elif (form_info == FormInfo.DOWNLOAD_FAILURE):
+        download_info_part = "The file you requested seems to have disappeared."
+
+    if (shared_file_state == SharedFileState.PREPARING):
+        prepare_info = "(archive is being prepared, try again soon)"
+
+    if (allow_upload):
+        upload_part = """<h2>You can upload a file</h2>
+<p><form action="/" enctype="multipart/form-data" method="post">
+<input type="file" name="file" size="20">
+<input type="submit" value="Upload">
+</form>%s</p>""" % upload_info_part
+
+    if (shared_file and shared_file_state != SharedFileState.BROKEN):
+        download_part = """<h2>A file is available for download</h2>
+<p><a href="/1">%s</a> %s</p>""" % (GLib.path_get_basename (shared_file), prepare_info)
+
+    form = """<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"
+\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
+<html>
+<head><title>Friendly File Server</title>
+<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />
+</head>
+<body>
+<h1>Hello, this is a Friendly File Server</h1>
+%s
+%s
+</body>
+</html>""" % (upload_part, download_part)
+    return form
+
+
 class FancyFileServer (Gtk.Window):
 
     def __init__ (self, files, port, allow_uploads):
@@ -108,7 +175,7 @@ class FancyFileServer (Gtk.Window):
             # TODO: error?
             return
 
-        self.local_ip = self.find_ip ()
+        self.local_ip = find_ip ()
         self.local_port = self.server.get_port ()
         self.server.add_handler (None, self.on_soup_request, None)
         print "Server starting, guessed uri http://%s:%d" % (self.local_ip, self.local_port)
@@ -141,30 +208,6 @@ class FancyFileServer (Gtk.Window):
         if (self.server):
             self.server.disconnect ()
             self.server = None
-
-
-    # Utility function to guess the IP (as a string) where the server can be
-    # reached from the outside. Quite nasty problem actually.
-    # Copied from http://www.home.unix-ag.org/simon/woof, GPL 2+
-    def find_ip (self):
-        # we get a UDP-socket for the TEST-networks reserved by IANA.
-        # It is highly unlikely, that there is special routing used
-        # for these networks, hence the socket later should give us
-        # the ip address of the default route.
-        # We're doing multiple tests, to guard against the computer being
-        # part of a test installation.
-
-        candidates = []
-        for test_ip in ["192.0.2.0", "198.51.100.0", "203.0.113.0"]:
-            s = socket.socket (socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect ((test_ip, 80))
-            ip_addr = s.getsockname ()[0]
-            s.close ()
-            if ip_addr in candidates:
-                return ip_addr
-            candidates.append (ip_addr)
-
-        return candidates[0]
 
 
     def update_ui (self):
@@ -201,51 +244,6 @@ class FancyFileServer (Gtk.Window):
                                          % (basename, self.download_count))
 
 
-    def get_form (self, form_info):
-        upload_info_part = "<br>"
-        upload_part = ""
-        download_info_part = "<br>"
-        prepare_info = ""
-        download_part = "<h2>No downloads are available</h2>"
-
-        if (form_info == FormInfo.UPLOAD_SUCCEEDED):
-            upload_info_part = "Your file was uploaded succesfully."
-        elif (form_info == FormInfo.UPLOAD_FAILED):
-            upload_info_part = "Your upload failed."
-        elif (form_info == FormInfo.DOWNLOAD_NOT_FOUND):
-            download_info_part = "That file you requested does not seem to exist."
-        elif (form_info == FormInfo.DOWNLOAD_FAILURE):
-            download_info_part = "The file you requested seems to have disappeared."
-
-        if (self.shared_file_state == SharedFileState.PREPARING):
-            prepare_info = "(archive is being prepared, try again soon)"
-
-        if (self.allow_upload):
-            upload_part = """<h2>You can upload a file</h2>
-<p><form action="/" enctype="multipart/form-data" method="post">
-<input type="file" name="file" size="20">
-<input type="submit" value="Upload">
-</form>%s</p>""" % upload_info_part
-
-        if (self.shared_file and self.shared_file_state != SharedFileState.BROKEN):
-            download_part = """<h2>A file is available for download</h2>
-<p><a href="/1">%s</a> %s</p>""" % (GLib.path_get_basename (self.shared_file), prepare_info)
-
-        form = """<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"
-\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
-<html>
-<head><title>Friendly File Server</title>
-<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />
-</head>
-<body>
-<h1>Hello, this is a Friendly File Server</h1>
-%s
-%s
-</body>
-</html>""" % (upload_part, download_part)
-        return form
-
-
     def on_soup_request (self, server, message, path, query, client, data):
         if (path == "/"):
             if (message.method == "GET" or message.method == "HEAD"):
@@ -262,7 +260,8 @@ class FancyFileServer (Gtk.Window):
 
 
     def reply_request (self, message, status, form_info):
-        form = self.get_form (form_info)
+        form = get_form (self.allow_upload, form_info,
+                         self.shared_file_state, self.shared_file)
         message.set_response ("text/html", Soup.MemoryUse.COPY, form)
         message.set_status (status)
 
@@ -454,6 +453,7 @@ class FancyFileServer (Gtk.Window):
         except GLib.Error as e:
             print "Failed to spawn 7z: %s" % e.message
             return None
+
 
     def on_button_clicked (self, widget):
         if (self.shared_file != None):

@@ -9,13 +9,6 @@ TODO: UI
       100.64.0.0 - 100.127.255.255
    Alternatively, could just guess that any ipv4 address that is not
    from gupnp-igd is in the local network...
- - show the results of confirm_uri()
- - only show one ip by default normally:
-    - confirmd upnp (hide local)
-    - confirmed local (hide upnp)
-    - unconfirmed upnp & unconfirmed local
-   (maybe add a "share in local network only" option)
- - fix the download counter to show _finished_ downloads
 
 TODO: bugs
  - fix the god-awful get_form-function
@@ -24,10 +17,11 @@ TODO: bugs
  - confirm_uri() should have a timeout to set state to "unavailable"
  - handle SharedFileState.BROKEN in UI
  - handle warnings/errors from 7z
+ - fix the download counter to show _finished_ downloads
 
 Possible options to add:
  - manually select port
      Port should be autoselected, but some ISPs block non-standard ports.
      Maybe could just try some random ports first, then 8080 and 80?
  - "stop sharing after file has been downloaded"
-
+ - "share only on local network"
