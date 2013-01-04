@@ -40,7 +40,7 @@ class FancyFileServer (Gtk.Window):
 
         self.download_count = 0
 
-        self.connect("delete_event", self.delete_event)
+        self.connect ("delete_event", self.delete_event)
 
         self.set_default_size (400, 200)
 
@@ -60,7 +60,7 @@ class FancyFileServer (Gtk.Window):
 
         self.share_button = Gtk.Button ()
         self.share_button.connect ("clicked", self.on_button_clicked)
-        vbox.pack_start(self.share_button, False, False, 0)
+        vbox.pack_start (self.share_button, False, False, 0)
 
         hbox = Gtk.HBox (spacing = 6)
         vbox.pack_end (hbox, False, False, 6)
@@ -82,10 +82,10 @@ class FancyFileServer (Gtk.Window):
 
 
     def on_upload_switch_notify (self, switch, spec):
-        self.allow_upload = self.upload_switch.get_active()
+        self.allow_upload = self.upload_switch.get_active ()
 
 
-    def delete_event(self, widget, event, data = None):
+    def delete_event (self, widget, event, data = None):
         self.stop_server ()
         return False
 
@@ -137,7 +137,7 @@ class FancyFileServer (Gtk.Window):
             self.igd = None
 
         if (self.server):
-            self.server.disconnect()
+            self.server.disconnect ()
             self.server = None
 
 
@@ -285,7 +285,7 @@ class FancyFileServer (Gtk.Window):
         # TODO fix file name clash
 
         try:
-            with open(filename, "w") as f:
+            with open (filename, "w") as f:
                 f.write (body.get_data ())
             self.reply_request (message, Soup.KnownStatusCode.OK, FormInfo.UPLOAD_SUCCEEDED)
         except:
@@ -300,7 +300,7 @@ class FancyFileServer (Gtk.Window):
             return
 
         if (message.method == "HEAD"):
-            # avoid loading the file just for confirm_url()
+            # avoid loading the file just for confirm_url ()
             message.set_status (Soup.KnownStatusCode.OK)
             return
 
@@ -345,7 +345,7 @@ class FancyFileServer (Gtk.Window):
         uri.set_path ("/")
         uri.set_port (port)
 
-        msg = Soup.Message()
+        msg = Soup.Message ()
         msg.set_property ("uri", uri)
         msg.set_property ("method", "HEAD")
 
@@ -429,11 +429,13 @@ class FancyFileServer (Gtk.Window):
         cmd = ["7z",
                "-y", "-tzip", "-bd", "-mx=9",
                "a", archive_name,
-               "--"]
-        flags = GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD | GLib.SpawnFlags.STDOUT_TO_DEV_NULL
+               ]
+        flags = GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD
         try:
             [pid, i, o, e] = GLib.spawn_async (cmd + files, [],
-                                               GLib.get_current_dir (), flags)
+                                               GLib.get_current_dir (),
+                                               flags, None, None,
+                                               False, True, True)
             GLib.child_watch_add (pid, self.on_child_process_exit)
             return archive_name
         except GLib.Error as e:
@@ -453,29 +455,29 @@ class FancyFileServer (Gtk.Window):
                 files = dialog.get_filenames ()
                 self.start_sharing (files)
 
-            dialog.destroy()
+            dialog.destroy ()
 
 
 def ensure_positive (value):
     try:
         v = int (value)
     except Exception:
-        raise argparse.ArgumentTypeError("Port must be a positive integer")
+        raise argparse.ArgumentTypeError ("Port must be a positive integer")
     if (v < 0):
-        raise argparse.ArgumentTypeError("Port must be a positive integer")
+        raise argparse.ArgumentTypeError ("Port must be a positive integer")
     return v
 
 
 # https://bugzilla.gnome.org/show_bug.cgi?id=622084
-signal.signal(signal.SIGINT, signal.SIG_DFL)
+signal.signal (signal.SIGINT, signal.SIG_DFL)
 
-parser = argparse.ArgumentParser(description="Share files on the internet.")
-parser.add_argument ("file", nargs = "*", help="file that should be shared")
+parser = argparse.ArgumentParser (description = "Share files on the internet.")
+parser.add_argument ("file", nargs = "*", help = "file that should be shared")
 parser.add_argument ("-p", "--port", type = ensure_positive, default = 0)
 parser.add_argument ("-u", "--allow-uploads", action = "store_true")
 args = parser.parse_args ()
 
-win = FancyFileServer (args.file, args.port, args.allow_uploads)
+win = FancyFileServer (list(set(args.file)), args.port, args.allow_uploads)
 win.connect ("delete-event", Gtk.main_quit)
 win.show_all ()
 Gtk.main ()
