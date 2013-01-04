@@ -3,6 +3,15 @@
 import argparse, os, signal, socket, sys, tempfile
 from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
 
+class FormInfo:
+    NO_INFO = 0
+    UPLOAD_FAILED = 1
+    UPLOAD_SUCCEEDED = 2
+    DOWNLOAD_NOT_FOUND = 3
+    PREPARING_DOWNLOAD = 4
+    DOWNLOAD_FAILURE = 5
+
+
 class IPState:
     UNKNOWN = 0
     AVAILABLE = 1
@@ -46,19 +55,16 @@ class FancyFileServer (Gtk.Window):
         self.address_label.set_selectable (True)
         vbox.pack_start (self.address_label, False, False, 0)
 
-        self.share_button = Gtk.Button ()
-        self.share_button.connect ("clicked", self.on_button_clicked)
-        vbox.pack_start(self.share_button, False, False, 0)
-
         self.sharing_label = Gtk.Label ("")
         self.sharing_label.set_ellipsize (Pango.EllipsizeMode.END)
         vbox.pack_start (self.sharing_label, False, False, 0)
 
-        self.info_label = Gtk.Label ("")
-        vbox.pack_start (self.info_label, False, False, 0)
+        self.share_button = Gtk.Button ()
+        self.share_button.connect ("clicked", self.on_button_clicked)
+        vbox.pack_start(self.share_button, False, False, 0)
 
         hbox = Gtk.HBox (spacing = 6)
-        vbox.pack_start (hbox, False, False, 0)
+        vbox.pack_end (hbox, False, False, 6)
 
         label = Gtk.Label ("Allow uploads:")
         hbox.pack_start (label, False, False, 0)
@@ -170,43 +176,53 @@ class FancyFileServer (Gtk.Window):
         if (self.shared_file == None):
             self.share_button.set_label ("Share files")
             self.sharing_label.set_text ("Currently sharing nothing.")
-            self.info_label.set_text ("")
             return
 
         self.share_button.set_label ("Stop sharing")
 
         if (self.shared_file_state == SharedFileState.BROKEN):
             self.sharing_label.set_text ("Failed to share '%s', sorry." % GLib.path_get_basename (self.shared_file))
-            self.info_label.set_text ("")
             return
 
         if (self.shared_file_state == SharedFileState.PREPARING):
             self.sharing_label.set_text ("Now preparing '%s' for sharing" % GLib.path_get_basename (self.shared_file))
-        else:
-            self.sharing_label.set_text ("Now Sharing '%s'" % GLib.path_get_basename (self.shared_file))
-        if (self.download_count == 0):
-            self.info_label.set_text ("No downloads so far.")
+        elif (self.download_count == 0):
+            self.sharing_label.set_text ("Sharing '%s' (no downloads yet)" % GLib.path_get_basename (self.shared_file))
         elif (self.download_count == 1):
-            self.info_label.set_text ("One download so far.")
+            self.sharing_label.set_text ("Sharing '%s' (downloaded once)" % GLib.path_get_basename (self.shared_file))
         else:
-            self.info_label.set_text ("%d downloads so far." % self.download_count)
+            self.sharing_label.set_text ("Sharing '%s' (%d downloads)" % (GLib.path_get_basename (self.shared_file), self.download_count))
 
 
-    def get_form (self):
-
+    def get_form (self, form_info):
+        upload_info_part = "<br>"
         upload_part = ""
-        download_part = "<h2>No downloads right now</h2>"
+        download_info_part = "<br>"
+        prepare_info = ""
+        download_part = "<h2>No downloads are available</h2>"
+
+        if (form_info == FormInfo.UPLOAD_SUCCEEDED):
+            upload_info_part = "Your file was uploaded succesfully."
+        elif (form_info == FormInfo.UPLOAD_FAILED):
+            upload_info_part = "Your upload failed."
+        elif (form_info == FormInfo.DOWNLOAD_NOT_FOUND):
+            download_info_part = "That file you requested does not seem to exist."
+        elif (form_info == FormInfo.DOWNLOAD_FAILURE):
+            download_info_part = "The file you requested seems to have disappeared."
+
+        if (self.shared_file_state == SharedFileState.PREPARING):
+            prepare_info = "(archive is being prepared, try again soon)"
 
         if (self.allow_upload):
             upload_part = """<h2>You can upload files</h2>
 <p><form action="/" enctype="multipart/form-data" method="post">
 <input type="file" name="file" size="20">
 <input type="submit" value="Send">
-</form></p>"""
+</form>%s</p>""" % upload_info_part
 
         if (self.shared_file and self.shared_file_state != SharedFileState.BROKEN):
             download_part = """<h2>A file is available for download</h2>
-<p><a href="/1">%s</a></p>""" % GLib.path_get_basename (self.shared_file)
+<p><a href="/1">%s</a> %s</p>""" % (GLib.path_get_basename (self.shared_file), prepare_info)
 
         form = """<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
 <html>
@@ -218,16 +234,6 @@ class FancyFileServer (Gtk.Window):
 </body>
 </html>""" % (upload_part, download_part)
         return form
-
-    def get_preparing_page (self):
-        return """<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
-<html>
-<head><title>Friendly File Server</title><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" /></head>
-<body>
-<h1>Oops</h1>
-<p>The file is still being prepared. Please try again in a moment.</p>
-</body>
-</html>"""
 
 
     def on_soup_request (self, server, message, path, query, client, data):
@@ -245,24 +251,26 @@ class FancyFileServer (Gtk.Window):
                 message.set_status (Soup.KnownStatusCode.METHOD_NOT_ALLOWED)
 
 
-    def handle_form_request (self, message):
-        form = self.get_form ()
+    def reply_request (self, message, status, form_info):
+        form = self.get_form (form_info)
         message.set_response ("text/html", Soup.MemoryUse.COPY, form)
-        message.set_status (Soup.KnownStatusCode.OK)
+        message.set_status (status)
+
+
+    def handle_form_request (self, message):
+        self.reply_request (message, Soup.KnownStatusCode.OK, FormInfo.NO_INFO)
 
 
     def handle_upload_request (self, message):
         if (not self.allow_upload):
-            message.set_status (Soup.KnownStatusCode.FORBIDDEN)
-            # TODO: error message
+            self.reply_request (message, Soup.KnownStatusCode.FORBIDDEN, FormInfo.NO_INFO)
             return
 
         mp = Soup.Multipart.new_from_message (message.request_headers,
                                               message.request_body)
         [has_part, header, body] = mp.get_part (0)
         if (not has_part):
-            message.set_status (Soup.KnownStatusCode.BAD_REQUEST)
-            # TODO: error message
+            self.reply_request (message, Soup.KnownStatusCode.BAD_REQUEST, FormInfo.UPLOAD_FAILED)
             return
 
         [has_cd, cd, params] = header.get_content_disposition ()
@@ -280,23 +288,16 @@ class FancyFileServer (Gtk.Window):
         try:
             with open(filename, "w") as f:
                 f.write (body.get_data ())
-            message.set_status (Soup.KnownStatusCode.OK)
+            self.reply_request (message, Soup.KnownStatusCode.OK, FormInfo.UPLOAD_SUCCEEDED)
         except:
             print "Attempted upload failed"
-            message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
+            self.reply_request (message, Soup.KnownStatusCode.INTERNAL_SERVER_ERROR, FormInfo.UPLOAD_FAILED)
 
 
     def handle_download_request (self, message, path):
         # could handle multiple files here ...
         if (path != "/1"):
-            message.set_status (Soup.KnownStatusCode.NOT_FOUND)
-            # TODO: error message
-            return
-
-        if (self.shared_file_state == SharedFileState.PREPARING):
-            page = self.get_preparing_page ()
-            message.set_response ("text/html", Soup.MemoryUse.COPY, page)
-            message.set_status (Soup.KnownStatusCode.ACCEPTED)
+            self.reply_request (message, Soup.KnownStatusCode.NOT_FOUND, FormInfo.DOWNLOAD_NOT_FOUND)
             return
 
         if (message.method == "HEAD"):
@@ -304,14 +305,16 @@ class FancyFileServer (Gtk.Window):
             message.set_status (Soup.KnownStatusCode.OK)
             return
 
+        if (self.shared_file_state == SharedFileState.PREPARING):
+            self.reply_request (message, Soup.KnownStatusCode.ACCEPTED, FormInfo.PREPARING_DOWNLOAD)
+            return
+
         if (self.shared_content == None):
             try:
                 self.shared_content = GLib.file_get_contents (self.shared_file)[1]
             except:
                 print "Failed to get contents of '%s' while handling request." % self.shared_file
-                message.set_status (Soup.KnownStatusCode.INTERNAL_SERVER_ERROR)
-                self.shared_file_state = SharedFileState.BROKEN
-                self.update_ui ()
+                self.reply_request (message, Soup.KnownStatusCode.INTERNAL_SERVER_ERROR, FormInfo.DOWNLOAD_FAILURE)
                 return
 
         message.set_status (Soup.KnownStatusCode.OK)
