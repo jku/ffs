@@ -464,7 +464,7 @@ class FancyFileServer (Gtk.Window):
             archive_name = "%s/archive.zip" % temp_dir
 
         cmd = ["7z",
-               "-y", "-tzip", "-bd", "-mx=9",
+               "-y", "-tzip", "-bd", "-mx=7",
                "a", archive_name,
                ]
         flags = GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD
