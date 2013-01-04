@@ -35,7 +35,6 @@ class FancyFileServer (Gtk.Window):
         self.allow_upload = allow_uploads
 
         self.shared_file = None
-        self.shared_content = None
         self.shared_file_is_temporary = False
         self.shared_file_state = SharedFileState.BROKEN
 
@@ -309,19 +308,18 @@ class FancyFileServer (Gtk.Window):
             self.reply_request (message, Soup.KnownStatusCode.ACCEPTED, FormInfo.PREPARING_DOWNLOAD)
             return
 
-        if (self.shared_content == None):
-            try:
-                self.shared_content = GLib.file_get_contents (self.shared_file)[1]
-            except:
-                print "Failed to get contents of '%s' while handling request." % self.shared_file
-                self.reply_request (message, Soup.KnownStatusCode.INTERNAL_SERVER_ERROR, FormInfo.DOWNLOAD_FAILURE)
-                return
+        try:
+            shared_content = GLib.file_get_contents (self.shared_file)[1]
+        except:
+            print "Failed to get contents of '%s' while handling request." % self.shared_file
+            self.reply_request (message, Soup.KnownStatusCode.INTERNAL_SERVER_ERROR, FormInfo.DOWNLOAD_FAILURE)
+            return
 
         message.set_status (Soup.KnownStatusCode.OK)
 
         attachment = {"filename": GLib.path_get_basename (self.shared_file)}
         message.response_headers.set_content_disposition ("attachment", attachment)
-        message.response_body.append_buffer (Soup.Buffer.new (self.shared_content))
+        message.response_body.append_buffer (Soup.Buffer.new (shared_content))
 
         self.download_count += 1
         self.update_ui ()
@@ -388,7 +386,6 @@ class FancyFileServer (Gtk.Window):
             self.shared_file_state = SharedFileState.BROKEN
             return
 
-        self.shared_content = None
         self.download_count = 0
 
         self.update_ui ()
@@ -403,7 +400,6 @@ class FancyFileServer (Gtk.Window):
                 print "Failed to remove temporary file"
 
         self.shared_file = None
-        self.shared_content = None
 
         self.update_ui ()
 
