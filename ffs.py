@@ -137,8 +137,9 @@ class FancyFileServer (Gtk.Window):
         hbox = Gtk.HBox (spacing = 6)
         vbox.pack_end (hbox, False, False, 6)
 
-        label = Gtk.Label ("Allow uploads:")
-        hbox.pack_start (label, False, False, 0)
+        self.upload_label = Gtk.Label ("Allow uploads:\n")
+        self.upload_label.set_alignment (0, 0.5)
+        hbox.pack_start (self.upload_label, True, True, 0)
 
         self.upload_switch = Gtk.Switch ()
         self.upload_switch.set_active (self.allow_upload)
@@ -155,6 +156,7 @@ class FancyFileServer (Gtk.Window):
 
     def on_upload_switch_notify (self, switch, spec):
         self.allow_upload = self.upload_switch.get_active ()
+        self.update_ui ()
 
 
     def delete_event (self, widget, event, data = None):
@@ -172,6 +174,8 @@ class FancyFileServer (Gtk.Window):
         self.upnp_ip_state = IPState.UNKNOWN
 
         self.igd = None
+
+        self.upload_count = 0
 
         try:
             self.server = GObject.new (Soup.Server,
@@ -216,7 +220,7 @@ class FancyFileServer (Gtk.Window):
             self.server = None
 
 
-    def update_ui (self):
+    def update_ui (self, should_grab = False):
         if (self.server == None):
             self.share_button.set_label ("Share files")
             if (self.config_port == 0):
@@ -231,10 +235,12 @@ class FancyFileServer (Gtk.Window):
         if (self.upnp_ip_state == IPState.AVAILABLE):
             self.upnp_ip_label.set_text ("%s:%d" % (self.upnp_ip, self.upnp_port))
             self.upnp_ip_label.set_visible (True)
-            self.upnp_ip_label.grab_focus ()
+            if (should_grab):
+                self.upnp_ip_label.grab_focus ()
         else:
             self.upnp_ip_label.set_visible (False)
-            self.local_ip_label.grab_focus ()
+            if (should_grab):
+                self.local_ip_label.grab_focus ()
 
 
         if (self.shared_file == None):
@@ -251,15 +257,15 @@ class FancyFileServer (Gtk.Window):
         if (self.archive_state == ArchiveState.PREPARING):
             self.sharing_label.set_text ("Now preparing '%s' for sharing"
                                          % basename)
-            return
-
-        if (self.download_count < 1):
+        elif (self.download_count < 1):
             if (self.download_finished_count == 0):
                 text = "no downloads yet"
             elif  (self.download_finished_count == 1):
                 text = "downloaded once"
             else:
                 text = "%d downloads so far" % self.download_finished_count
+            self.sharing_label.set_text ("Sharing '%s'\n(%s)"
+                                         % (basename, text))
         else:
             if (self.download_finished_count == 0):
                 text = "download in progress"
@@ -268,8 +274,17 @@ class FancyFileServer (Gtk.Window):
             else:
                 text = "download in progress, %d downloads so far" \
                        % self.download_finished_count
-        self.sharing_label.set_text ("Sharing '%s'\n(%s)" % (basename, text))
+            self.sharing_label.set_text ("Sharing '%s'\n(%s)"
+                                         % (basename, text))
 
+        if (not self.allow_upload and self.upload_count == 0):
+            self.upload_label.set_text ("Allow uploads:\n")
+        elif (self.upload_count == 0):
+            self.upload_label.set_text ("Allow uploads:\n(No uploads yet)")
+        elif (self.upload_count == 1):
+            self.upload_label.set_text ("Allow uploads:\n(One upload so far)")
+        elif (self.upload_count > 1):
+            self.upload_label.set_text ("Allow uploads:\n(%d uploads so far)" % self.upload_count)
 
     def on_soup_message_wrote_body (self, message):
         self.download_finished_count += 1
@@ -337,6 +352,8 @@ class FancyFileServer (Gtk.Window):
             with open (full_filename, "w") as f:
                 f.write (body.get_data ())
             self.reply_request (message, Status.OK, FormInfo.UPLOAD_SUCCEEDED)
+            self.upload_count += 1
+            self.update_ui ()
         except:
             print "Attempted upload failed"
             self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.UPLOAD_FAILED)
@@ -438,7 +455,7 @@ class FancyFileServer (Gtk.Window):
         self.download_count = 0
         self.download_finished_count = 0
 
-        self.update_ui ()
+        self.update_ui (should_grab = True)
 
 
     def stop_sharing (self):
