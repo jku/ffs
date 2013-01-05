@@ -1,11 +1,11 @@
 TODO: UI
  - should try to explain what is a local address and what is "internet"
- - could ajaxify some bits:
+ - maybe ajaxify some bits:
+   - could maybe trigger the download GET with a XHR so a reload
+     afterwards wouldn't be confusing
    - upload experience sucks like it does everywhere: could
      change the upload_info_part with js to say at least
      "Uploading your file, please wait..."
-   - could maybe trigger the POST with a XHR so a reload
-     afterwards wouldn't be confusing
  - Should have some info selecting multiple files and dirs, either
    in the UI or in the file chooser dialog
 
@@ -14,8 +14,10 @@ TODO: bugs
    Apparently this is only possible with separate buttons. WTF.
  - gupnp-igd error signal handler crashes
    This is at least somewhat fixed in gupnp-igd master
- - confirm_uri() should maybe have a timeout to set state to "unavailable"
-   and UI should react to it in some way
+ - confirm_uri() should maybe have a timeout to re-test a few times
+   and to set state to "unavailable" at some point. Also UI should 
+   react to it in some way. This relates to "manual port selection"
+   as well...
 
 Possible options to add:
  - manually select port

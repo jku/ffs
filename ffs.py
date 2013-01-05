@@ -112,17 +112,29 @@ class FriendlyFileServer (Gtk.Window):
         vbox = Gtk.VBox (spacing = 12)
         hbox.pack_start (vbox, True, True, 0)
 
-        ip_box = Gtk.VBox (spacing = 6)
-        vbox.pack_start (ip_box, False, False, 0)
+        ip_grid = Gtk.Grid ()
+        ip_grid.set_row_spacing (3)
+        ip_grid.set_column_spacing (12)
+        vbox.pack_start (ip_grid, False, False, 0)
+
+        self.local_info_label = Gtk.Label ("Sharing locally at")
+        self.local_info_label.set_alignment (0, 0.5)
+        ip_grid.attach (self.local_info_label, 0, 1, 1, 1)
 
         self.local_ip_label = Gtk.Label ("")
         self.local_ip_label.set_selectable (True)
-        ip_box.pack_start (self.local_ip_label, False, False, 0)
+        self.local_ip_label.set_alignment (0, 0.5)
+        ip_grid.attach (self.local_ip_label, 1, 1, 1, 1)
+
+        self.upnp_info_label = Gtk.Label ("Sharing on the internet")
+        self.upnp_info_label.set_alignment (0, 0.5)
+        ip_grid.attach (self.upnp_info_label, 0, 2, 1, 1)
 
         self.upnp_ip_label = Gtk.Label ("")
         self.upnp_ip_label.set_selectable (True)
-        ip_box.pack_start (self.upnp_ip_label, False, False, 0)
         self.upnp_ip_label.set_visible (False)
+        self.local_ip_label.set_alignment (0, 0.5)
+        ip_grid.attach (self.upnp_ip_label, 1, 2, 1, 1)
 
         share_box = Gtk.HBox (spacing = 6)
         vbox.pack_start (share_box, True, False, 0)
@@ -231,14 +243,19 @@ class FriendlyFileServer (Gtk.Window):
             self.set_sensitive (False)
             return
 
-        self.local_ip_label.set_text ("%s:%d" % (self.local_ip, self.local_port))
+        # always show the local address
+        self.local_ip_label.set_text ("http://%s:%d" % (self.local_ip, self.local_port))
+
+        # only show the port-forwarded opened address if we know it works ...
         if (self.upnp_ip_state == IPState.AVAILABLE):
-            self.upnp_ip_label.set_text ("%s:%d" % (self.upnp_ip, self.upnp_port))
+            self.upnp_ip_label.set_text ("http://%s:%d" % (self.upnp_ip, self.upnp_port))
             self.upnp_ip_label.set_visible (True)
+            self.upnp_info_label.set_visible (True)
             if (should_grab):
                 self.upnp_ip_label.grab_focus ()
         else:
             self.upnp_ip_label.set_visible (False)
+            self.upnp_info_label.set_visible (False)
             if (should_grab):
                 self.local_ip_label.grab_focus ()
 
@@ -396,6 +413,8 @@ class FriendlyFileServer (Gtk.Window):
 
         if (is_upnp):
             self.upnp_ip_state = state
+            if (state == IPState.AVAILABLE):
+                print ("Port-forward confirmed to work ")
         else:
             self.local_ip_state = state
 
@@ -426,7 +445,7 @@ class FriendlyFileServer (Gtk.Window):
                             ext_ip, old_ext_ip, ext_port,
                             local_ip, local_port,
                             desc):
-        print "NAT punched at http://%s:%d" % (ext_ip, ext_port)
+        print "Port-forwarded http://%s:%d" % (ext_ip, ext_port)
         self.upnp_ip = ext_ip
         self.upnp_port = ext_port
         self.upnp_ip_state = IPState.UNKNOWN
