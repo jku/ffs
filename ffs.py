@@ -107,8 +107,6 @@ class FancyFileServer (Gtk.Window):
         self.shared_file = None
         self.shared_file_is_temporary = False
 
-        self.download_count = 0
-
         self.connect ("delete_event", self.delete_event)
 
         self.set_default_size (400, 200)
@@ -245,15 +243,30 @@ class FancyFileServer (Gtk.Window):
         if (self.archive_state == ArchiveState.PREPARING):
             self.sharing_label.set_text ("Now preparing '%s' for sharing"
                                          % basename)
-        elif (self.download_count == 0):
-            self.sharing_label.set_text ("Sharing '%s' (no downloads yet)"
-                                         % basename)
-        elif (self.download_count == 1):
-            self.sharing_label.set_text ("Sharing '%s' (downloaded once)"
-                                         % basename)
+            return
+
+        if (self.download_count < 1):
+            if (self.download_finished_count == 0):
+                text = "no downloads yet"
+            elif  (self.download_finished_count == 1):
+                text = "downloaded once"
+            else:
+                text = "%d downloads so far" % self.download_finished_count
         else:
-            self.sharing_label.set_text ("Sharing '%s' (%d downloads)"
-                                         % (basename, self.download_count))
+            if (self.download_finished_count == 0):
+                text = "download in progress"
+            elif  (self.download_finished_count == 1):
+                text = "download in progress, downloaded once already"
+            else:
+                text = "download in progress, %d downloads so far" \
+                       % self.download_finished_count
+        self.sharing_label.set_text ("Sharing '%s' (%s)" % (basename, text))
+
+
+    def on_soup_message_wrote_body (self, message):
+        self.download_finished_count += 1
+        self.download_count -= 1
+        self.update_ui ()
 
 
     def on_soup_request (self, server, message, path, query, client, data):
@@ -340,11 +353,11 @@ class FancyFileServer (Gtk.Window):
             return
 
         message.set_status (Status.OK)
-
         attachment = {"filename": GLib.path_get_basename (self.shared_file)}
         message.response_headers.set_content_disposition ("attachment", attachment)
         message.response_body.append_buffer (Soup.Buffer.new (shared_content))
 
+        message.connect ("wrote-body", self.on_soup_message_wrote_body)
         self.download_count += 1
         self.update_ui ()
 
@@ -411,6 +424,7 @@ class FancyFileServer (Gtk.Window):
             return
 
         self.download_count = 0
+        self.download_finished_count = 0
 
         self.update_ui ()
 

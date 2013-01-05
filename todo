@@ -16,7 +16,6 @@ TODO: bugs
  - gupnp-igd error signal handler crashes (fixed in gupnp-igd master)
  - confirm_uri() should have a timeout to set state to "unavailable"
  - handle SharedFileState.BROKEN in UI
- - fix the download counter to show _finished_ downloads
 
 Possible options to add:
  - manually select port
