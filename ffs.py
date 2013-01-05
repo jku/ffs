@@ -19,10 +19,11 @@ class IPState:
     AVAILABLE = 1
     UNAVAILABLE = 2
 
-class SharedFileState:
-    BROKEN = 0
+class ArchiveState:
+    FAILED = 0
     PREPARING = 1
     READY = 2
+    NA = 3
 
 # Utility function to guess the IP (as a string) where the server can be
 # reached from the outside. Quite nasty problem actually.
@@ -46,7 +47,7 @@ def find_ip ():
     return candidates[0]
 
 
-def get_form (allow_upload, form_info, shared_file_state, shared_file):
+def get_form (allow_upload, form_info, archive_state, shared_file):
     upload_info_part = "<br>"
     upload_part = ""
     download_info_part = "<br>"
@@ -62,7 +63,7 @@ def get_form (allow_upload, form_info, shared_file_state, shared_file):
     elif (form_info == FormInfo.DOWNLOAD_FAILURE):
         download_info_part = "The file you requested seems to have disappeared."
 
-    if (shared_file_state == SharedFileState.PREPARING):
+    if (archive_state == ArchiveState.PREPARING):
         prepare_info = "(archive is being prepared, try again soon)"
 
     if (allow_upload):
@@ -72,7 +73,7 @@ def get_form (allow_upload, form_info, shared_file_state, shared_file):
 <input type="submit" value="Upload">
 </form>%s</p>""" % upload_info_part
 
-    if (shared_file and shared_file_state != SharedFileState.BROKEN):
+    if (shared_file and archive_state != ArchiveState.FAILED):
         download_part = """<h2>A file is available for download</h2>
 <p><a href="/1">%s</a> %s</p>""" % (GLib.path_get_basename (shared_file), prepare_info)
 
@@ -105,7 +106,6 @@ class FancyFileServer (Gtk.Window):
 
         self.shared_file = None
         self.shared_file_is_temporary = False
-        self.shared_file_state = SharedFileState.BROKEN
 
         self.download_count = 0
 
@@ -190,7 +190,7 @@ class FancyFileServer (Gtk.Window):
         try:
             self.igd = GUPnPIgd.SimpleIgd ()
             self.igd.connect ("mapped-external-port", self.on_igd_mapped_port)
-            # Broken: python/GI can't cope with signals with GError
+            # FAILED: python/GI can't cope with signals with GError
             # self.igd.connect ("error-mapping-port", self.on_igd_error)
             self.igd.add_port ("TCP",
                                self.local_port, # remote port really
@@ -233,18 +233,16 @@ class FancyFileServer (Gtk.Window):
 
         if (self.shared_file == None):
             self.share_button.set_label ("Share files")
-            self.sharing_label.set_text ("Currently sharing nothing.")
+            if (self.archive_state == ArchiveState.FAILED):
+                self.sharing_label.set_text ("Failed to create the archive.")
+            else:
+                self.sharing_label.set_text ("Currently sharing nothing.")
             return
 
         self.share_button.set_label ("Stop sharing")
 
         basename = GLib.path_get_basename (self.shared_file)
-        if (self.shared_file_state == SharedFileState.BROKEN):
-            self.sharing_label.set_text ("Failed to share '%s', sorry." 
-                                         % basename)
-            return
-
-        if (self.shared_file_state == SharedFileState.PREPARING):
+        if (self.archive_state == ArchiveState.PREPARING):
             self.sharing_label.set_text ("Now preparing '%s' for sharing"
                                          % basename)
         elif (self.download_count == 0):
@@ -275,7 +273,7 @@ class FancyFileServer (Gtk.Window):
 
     def reply_request (self, message, status, form_info):
         form = get_form (self.allow_upload, form_info,
-                         self.shared_file_state, self.shared_file)
+                         self.archive_state, self.shared_file)
         message.set_response ("text/html", Soup.MemoryUse.COPY, form)
         message.set_status (status)
 
@@ -330,7 +328,7 @@ class FancyFileServer (Gtk.Window):
             message.set_status (Status.OK)
             return
 
-        if (self.shared_file_state == SharedFileState.PREPARING):
+        if (self.archive_state == ArchiveState.PREPARING):
             self.reply_request (message, Status.ACCEPTED, FormInfo.PREPARING_DOWNLOAD)
             return
 
@@ -401,15 +399,15 @@ class FancyFileServer (Gtk.Window):
 
         if (len (files) > 1 or GLib.file_test (files[0], GLib.FileTest.IS_DIR)):
             self.shared_file_is_temporary = True
-            self.shared_file_state = SharedFileState.PREPARING
+            self.archive_state = ArchiveState.PREPARING
             self.shared_file = self.create_temporary_archive (files)
         elif (len (files) == 1):
             self.shared_file_is_temporary = False
-            self.shared_file_state = SharedFileState.READY
+            self.archive_state = ArchiveState.NA
             self.shared_file = files[0]
 
         if (self.shared_file == None):
-            self.shared_file_state = SharedFileState.BROKEN
+            self.archive_state = ArchiveState.FAILED
             return
 
         self.download_count = 0
@@ -434,14 +432,15 @@ class FancyFileServer (Gtk.Window):
         should_print = True
         wexitstatus = os.WEXITSTATUS (status)
         if (wexitstatus == 0):
-            self.shared_file_state = SharedFileState.READY
+            self.archive_state = ArchiveState.READY
             should_print = False
         elif (wexitstatus == 1):
             # warning
-            self.shared_file_state = SharedFileState.READY
+            self.archive_state = ArchiveState.READY
         else:
             # error
-            self.shared_file_state = SharedFileState.BROKEN
+            self.shared_file = None
+            self.archive_state = ArchiveState.FAILED
 
         if (should_print):
             print ("7z returned %s, printing full output:"
@@ -453,6 +452,7 @@ class FancyFileServer (Gtk.Window):
 
         GLib.spawn_close_pid (pid)
         self.out_7z = None
+
         self.update_ui ()
 
 
