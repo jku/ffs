@@ -94,6 +94,60 @@ def get_human_readable_bytes (size):
         size = size/1024
     return "%d %s" % (size, suffixes[i])
 
+
+class Zipper ():
+
+    def __init__ (self):
+        if (not GLib.find_program_in_path ("7z")):
+            raise Exception
+
+    def on_child_process_exit (self, pid, status, callback):
+        should_print = True
+        wexitstatus = os.WEXITSTATUS (status)
+        if (wexitstatus == 0):
+            state = ArchiveState.READY
+            should_print = False
+        elif (wexitstatus == 1):
+            # warning
+            state = ArchiveState.READY
+        else:
+            # error
+            state = ArchiveState.FAILED
+
+        if (should_print):
+            print ("7z returned %s, printing full output:"
+                   % wexitstatus)
+            line = self.out_7z.readline ()
+            while (line):
+                sys.stdout.write(" | " + line)
+                line = self.out_7z.readline ()
+
+        GLib.spawn_close_pid (pid)
+        self.out_7z = None
+
+        callback (state)
+
+
+    def create_archive (self, files, callback):
+        temp_dir = tempfile.mkdtemp ("", "ffs-")
+        if (len (files) == 1):
+            archive_name = os.path.join (temp_dir, GLib.path_get_basename (files[0]))
+        else:
+            archive_name = os.path.join (temp_dir, "archive.zip")
+
+        cmd = ["7z",  "-y", "-tzip", "-bd", "-mx=7", "a", archive_name ]
+        flags = GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD
+        result = GLib.spawn_async (cmd + files, [],
+                                   GLib.get_current_dir (),
+                                   flags, None, None,
+                                   False, True, False)
+        self.out_7z = GLib.IOChannel (result[2])
+        self.out_7z.set_close_on_unref (True)
+        GLib.child_watch_add (result[0], self.on_child_process_exit, callback)
+
+        return archive_name
+
+
 class FriendlyFileServer (Gtk.Window):
 
     def __init__ (self, files, port, allow_uploads):
@@ -102,9 +156,11 @@ class FriendlyFileServer (Gtk.Window):
         self.config_port = port
         self.allow_upload = allow_uploads
         self.server_header = "friendly-file-server"
-        self.have_7z = GLib.find_program_in_path ("7z")
 
-        self.out_7z = None
+        try:
+            self.zipper = Zipper ()
+        except:
+            self.zipper = None
 
         self.shared_file = None
         self.archive_state = ArchiveState.NA
@@ -314,6 +370,7 @@ class FriendlyFileServer (Gtk.Window):
             self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>%d uploads</a> so far, totalling %s)"
                                           % (self.upload_dir, self.upload_count, get_human_readable_bytes(self.upload_bytes)))
 
+
     def on_soup_message_wrote_body (self, message):
         self.download_finished_count += 1
         self.download_count -= 1
@@ -473,7 +530,7 @@ class FriendlyFileServer (Gtk.Window):
 
         if (len (files) > 1 or GLib.file_test (files[0], GLib.FileTest.IS_DIR)):
             self.archive_state = ArchiveState.FAILED
-            self.shared_file = self.create_temporary_archive (files)
+            self.shared_file = self.zipper.create_archive (files, self.on_archive_ready)
             self.archive_state = ArchiveState.PREPARING
         elif (len (files) == 1):
             self.archive_state = ArchiveState.NA
@@ -494,34 +551,6 @@ class FriendlyFileServer (Gtk.Window):
                 print "Failed to remove temporary file"
 
         self.shared_file = None
-
-        self.update_ui ()
-
-
-    def on_child_process_exit (self, pid, status):
-        should_print = True
-        wexitstatus = os.WEXITSTATUS (status)
-        if (wexitstatus == 0):
-            self.archive_state = ArchiveState.READY
-            should_print = False
-        elif (wexitstatus == 1):
-            # warning
-            self.archive_state = ArchiveState.READY
-        else:
-            # error
-            self.shared_file = None
-            self.archive_state = ArchiveState.FAILED
-
-        if (should_print):
-            print ("7z returned %s, printing full output:"
-                   % wexitstatus)
-            line = self.out_7z.readline ()
-            while (line):
-                sys.stdout.write(" | " + line)
-                line = self.out_7z.readline ()
-
-        GLib.spawn_close_pid (pid)
-        self.out_7z = None
 
         self.update_ui ()
 
@@ -554,27 +583,11 @@ class FriendlyFileServer (Gtk.Window):
         raise Exception
 
 
-    def create_temporary_archive (self, files):
-        temp_dir = tempfile.mkdtemp ("", "ffs-")
-        if (len (files) == 1):
-            archive_name = "%s/%s.zip" % (temp_dir, GLib.path_get_basename (files[0]))
-        else:
-            archive_name = "%s/archive.zip" % temp_dir
-
-        cmd = ["7z",
-               "-y", "-tzip", "-bd", "-mx=7",
-               "a", archive_name,
-               ]
-        flags = GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD
-
-        result = GLib.spawn_async (cmd + files, [],
-                                   GLib.get_current_dir (),
-                                   flags, None, None,
-                                   False, True, False)
-        self.out_7z = GLib.IOChannel (result[2])
-        self.out_7z.set_close_on_unref (True)
-        GLib.child_watch_add (result[0], self.on_child_process_exit)
-        return archive_name
+    def on_archive_ready (self, state):
+        self.archive_state = state
+        if (self.archive_state == ArchiveState.FAILED):
+            self.shared_file = None
+        self.update_ui ()
 
 
     def on_button_clicked (self, widget):
@@ -585,8 +598,8 @@ class FriendlyFileServer (Gtk.Window):
                                             Gtk.FileChooserAction.OPEN,
                                             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
                                              "Share", Gtk.ResponseType.OK))
-            dialog.set_select_multiple (self.have_7z)
-            if (self.have_7z):
+            dialog.set_select_multiple (self.zipper)
+            if (self.zipper):
                 info = Gtk.Label ("You can select multiple files. If you do, they will "
                                   "be added to a zip archive which will then be shared.")
                 dialog.set_extra_widget (info)
