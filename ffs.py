@@ -437,16 +437,13 @@ class FancyFileServer (Gtk.Window):
 
         if (len (files) > 1 or GLib.file_test (files[0], GLib.FileTest.IS_DIR)):
             self.shared_file_is_temporary = True
-            self.archive_state = ArchiveState.PREPARING
+            self.archive_state = ArchiveState.FAILED
             self.shared_file = self.create_temporary_archive (files)
+            self.archive_state = ArchiveState.PREPARING
         elif (len (files) == 1):
             self.shared_file_is_temporary = False
             self.archive_state = ArchiveState.NA
             self.shared_file = files[0]
-
-        if (self.shared_file == None):
-            self.archive_state = ArchiveState.FAILED
-            return
 
         self.download_count = 0
         self.download_finished_count = 0
@@ -534,20 +531,15 @@ class FancyFileServer (Gtk.Window):
                "a", archive_name,
                ]
         flags = GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD
-        try:
-            result = GLib.spawn_async (cmd + files, [],
-                                       GLib.get_current_dir (),
-                                       flags, None, None,
-                                       False, True, False)
-            self.out_7z = GLib.IOChannel (result[2])
-            self.out_7z.set_close_on_unref (True)
-            GLib.child_watch_add (result[0], self.on_child_process_exit)
-            return archive_name
-        except GLib.Error as e:
-            print "Failed to spawn 7z: %s" % e.message
-            return None
-        except e:
-            return None
+
+        result = GLib.spawn_async (cmd + files, [],
+                                   GLib.get_current_dir (),
+                                   flags, None, None,
+                                   False, True, False)
+        self.out_7z = GLib.IOChannel (result[2])
+        self.out_7z.set_close_on_unref (True)
+        GLib.child_watch_add (result[0], self.on_child_process_exit)
+        return archive_name
 
 
     def on_button_clicked (self, widget):
@@ -561,7 +553,10 @@ class FancyFileServer (Gtk.Window):
             dialog.set_select_multiple (self.have_7z)
             if (dialog.run () == Gtk.ResponseType.OK):
                 files = dialog.get_filenames ()
-                self.start_sharing (files)
+                try:
+                    self.start_sharing (files)
+                except:
+                    self.update_ui ()
 
             dialog.destroy ()
 
