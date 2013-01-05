@@ -103,16 +103,17 @@ class FancyFileServer (Gtk.Window):
 
         self.connect ("delete_event", self.delete_event)
 
-        self.set_default_size (400, 200)
+        self.set_default_size (350, 250)
 
         hbox = Gtk.HBox (spacing = 6)
+        hbox.set_border_width (18)
         self.add (hbox)
 
         vbox = Gtk.VBox (spacing = 12)
-        hbox.pack_start (vbox, True, False, 0)
+        hbox.pack_start (vbox, True, True, 0)
 
         ip_box = Gtk.VBox (spacing = 6)
-        vbox.pack_start (ip_box, True, False, 0)
+        vbox.pack_start (ip_box, False, False, 0)
 
         self.local_ip_label = Gtk.Label ("")
         self.local_ip_label.set_selectable (True)
@@ -132,7 +133,8 @@ class FancyFileServer (Gtk.Window):
 
         self.sharing_label = Gtk.Label ("")
         self.sharing_label.set_ellipsize (Pango.EllipsizeMode.END)
-        share_box.pack_start (self.sharing_label, False, False, 0)
+        self.sharing_label.set_alignment (0, 0.5)
+        share_box.pack_start (self.sharing_label, True, True, 0)
 
         hbox = Gtk.HBox (spacing = 6)
         vbox.pack_end (hbox, False, False, 6)
