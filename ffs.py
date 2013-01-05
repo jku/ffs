@@ -86,14 +86,14 @@ def get_form (allow_upload, form_info, archive_state, shared_file):
     return prefix + upload_part + download_part + postfix
 
 
-class FancyFileServer (Gtk.Window):
+class FriendlyFileServer (Gtk.Window):
 
     def __init__ (self, files, port, allow_uploads):
-        Gtk.Window.__init__ (self, title = "Fancy File Server")
+        Gtk.Window.__init__ (self, title = "Friendly File Server")
         
         self.config_port = port
         self.allow_upload = allow_uploads
-        self.server_header = "fancy-file-server"
+        self.server_header = "friendly-file-server"
         self.have_7z = GLib.find_program_in_path ("7z")
 
         self.out_7z = None
@@ -204,7 +204,7 @@ class FancyFileServer (Gtk.Window):
         self.igd.add_port ("TCP",
                            self.local_port, # remote port really
                            self.local_ip, self.local_port,
-                           0, "Fancy File Server")
+                           0, "Friendly File Server")
         self.upnp_ip_state = IPState.UNKNOWN
 
 
@@ -572,7 +572,7 @@ parser.add_argument ("-p", "--port", type = int, default = 0)
 parser.add_argument ("-u", "--allow-uploads", action = "store_true")
 args = parser.parse_args ()
 
-win = FancyFileServer (list(set(args.file)), args.port, args.allow_uploads)
+win = FriendlyFileServer (list(set(args.file)), args.port, args.allow_uploads)
 win.connect ("delete-event", Gtk.main_quit)
 win.show_all ()
 Gtk.main ()
