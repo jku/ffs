@@ -1,21 +1,12 @@
 TODO: UI
- - try to make informed guesses on what is an "internet" ip and
-   what is in the local network:
-    IANA private networks:
-      10.0.0.0 - 10.255.255.255
-      172.16.0.0 - 172.31.255.255
-      192.168.0.0 - 192.168.255.255
-    IANA carrier grade NAT:
-      100.64.0.0 - 100.127.255.255
-   Alternatively, could just guess that any ipv4 address that is not
-   from gupnp-igd is in the local network...
-
+ - probably need to show local ip as well when upnp-igd is used:
+   should try to make clear what is a local address and what is "internet"
+   
 TODO: bugs
  - fix the god-awful get_form-function
  - allow selecting directories somehow
  - gupnp-igd error signal handler crashes (fixed in gupnp-igd master)
  - confirm_uri() should have a timeout to set state to "unavailable"
- - handle SharedFileState.BROKEN in UI
 
 Possible options to add:
  - manually select port
