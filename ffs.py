@@ -537,6 +537,7 @@ class FriendlyFileServer (Gtk.Window):
                 try:
                     os.makedirs (dirname)
                     self.upload_dir = dirname
+                    break
                 except os.error:
                     dirname = os.path.join (dl_dir, "Friendly File Server Uploads(%d)" % i)
             if (not self.upload_dir): raise Exception
