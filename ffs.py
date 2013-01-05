@@ -566,22 +566,12 @@ class FancyFileServer (Gtk.Window):
             dialog.destroy ()
 
 
-def ensure_positive (value):
-    try:
-        v = int (value)
-    except Exception:
-        raise argparse.ArgumentTypeError ("Port must be a positive integer")
-    if (v < 0):
-        raise argparse.ArgumentTypeError ("Port must be a positive integer")
-    return v
-
-
 # https://bugzilla.gnome.org/show_bug.cgi?id=622084
 signal.signal (signal.SIGINT, signal.SIG_DFL)
 
 parser = argparse.ArgumentParser (description = "Share files on the internet.")
 parser.add_argument ("file", nargs = "*", help = "file that should be shared")
-parser.add_argument ("-p", "--port", type = ensure_positive, default = 0)
+parser.add_argument ("-p", "--port", type = int, default = 0)
 parser.add_argument ("-u", "--allow-uploads", action = "store_true")
 args = parser.parse_args ()
 
