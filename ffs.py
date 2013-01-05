@@ -107,7 +107,7 @@ class FriendlyFileServer (Gtk.Window):
         self.out_7z = None
 
         self.shared_file = None
-        self.shared_file_is_temporary = False
+        self.archive_state = ArchiveState.NA
 
         self.connect ("delete_event", self.delete_event)
 
@@ -472,12 +472,10 @@ class FriendlyFileServer (Gtk.Window):
             self.stop_sharing ()
 
         if (len (files) > 1 or GLib.file_test (files[0], GLib.FileTest.IS_DIR)):
-            self.shared_file_is_temporary = True
             self.archive_state = ArchiveState.FAILED
             self.shared_file = self.create_temporary_archive (files)
             self.archive_state = ArchiveState.PREPARING
         elif (len (files) == 1):
-            self.shared_file_is_temporary = False
             self.archive_state = ArchiveState.NA
             self.shared_file = files[0]
 
@@ -488,7 +486,7 @@ class FriendlyFileServer (Gtk.Window):
 
 
     def stop_sharing (self):
-        if (self.shared_file_is_temporary):
+        if (self.archive_state != ArchiveState.NA):
             try:
                 os.remove (self.shared_file)
                 os.rmdir (GLib.path_get_dirname (self.shared_file))
