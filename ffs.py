@@ -86,6 +86,14 @@ def get_form (allow_upload, form_info, archive_state, shared_file):
     return prefix + upload_part + download_part + postfix
 
 
+def get_human_readable_bytes (size):
+    suffixes = ['B','KB','MB','GB','TB']
+    i = 0
+    while (size > 1024 or i < 1):
+        i += 1
+        size = size/1024
+    return "%d %s" % (size, suffixes[i])
+
 class FriendlyFileServer (Gtk.Window):
 
     def __init__ (self, files, port, allow_uploads):
@@ -193,6 +201,7 @@ class FriendlyFileServer (Gtk.Window):
         self.igd = None
 
         self.upload_count = 0
+        self.upload_bytes = 0
         self.upload_dir = None
 
         self.server = GObject.new (Soup.Server,
@@ -299,11 +308,11 @@ class FriendlyFileServer (Gtk.Window):
         elif (self.upload_count == 0):
             self.upload_label.set_text ("Allow uploads:\n(No uploads yet)")
         elif (self.upload_count == 1):
-            self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>One upload</a> so far)"
-                                          % self.upload_dir)
+            self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>One upload</a> so far, %s)"
+                                          % (self.upload_dir, get_human_readable_bytes(self.upload_bytes)))
         elif (self.upload_count > 1):
-            self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>%d uploads</a> so far)"
-                                          % (self.upload_dir, self.upload_count))
+            self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>%d uploads</a> so far, totalling %s)"
+                                          % (self.upload_dir, self.upload_count, get_human_readable_bytes(self.upload_bytes)))
 
     def on_soup_message_wrote_body (self, message):
         self.download_finished_count += 1
@@ -363,6 +372,7 @@ class FriendlyFileServer (Gtk.Window):
             self.reply_request (message, Status.BAD_REQUEST, FormInfo.UPLOAD_FAILURE)
             return
 
+        data = body.get_data ()
         [has_cd, cd, params] = header.get_content_disposition ()
 
         basename = "Upload"
@@ -371,12 +381,12 @@ class FriendlyFileServer (Gtk.Window):
         new_filename = self.get_upload_filename (basename)
 
         with open (new_filename, "w") as f:
-            f.write (body.get_data ())
+            f.write (data)
 
         self.reply_request (message, Status.OK, FormInfo.UPLOAD_SUCCESS)
         self.upload_count += 1
+        self.upload_bytes += len(data)
         self.update_ui ()
-        print " * Upload finished"
 
 
     def handle_download_request (self, message, path):
