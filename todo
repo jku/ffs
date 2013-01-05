@@ -1,7 +1,5 @@
 TODO: UI
- - probably need to show local ip as well when upnp-igd is used:
-   should try to make clear what is a local address and what is "internet"
- - Need to have some way to access uploads from UI
+ - should try to explain what is a local address and what is "internet"
    
 TODO: bugs
  - allow selecting directories somehow

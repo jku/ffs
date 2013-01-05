@@ -176,6 +176,7 @@ class FancyFileServer (Gtk.Window):
         self.igd = None
 
         self.upload_count = 0
+        self.upload_dir = None
 
         try:
             self.server = GObject.new (Soup.Server,
@@ -282,14 +283,17 @@ class FancyFileServer (Gtk.Window):
         elif (self.upload_count == 0):
             self.upload_label.set_text ("Allow uploads:\n(No uploads yet)")
         elif (self.upload_count == 1):
-            self.upload_label.set_text ("Allow uploads:\n(One upload so far)")
+            self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>One upload</a> so far)"
+                                          % self.upload_dir)
         elif (self.upload_count > 1):
-            self.upload_label.set_text ("Allow uploads:\n(%d uploads so far)" % self.upload_count)
+            self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>%d uploads</a> so far)"
+                                          % (self.upload_dir, self.upload_count))
 
     def on_soup_message_wrote_body (self, message):
         self.download_finished_count += 1
         self.download_count -= 1
         self.update_ui ()
+        print " * Download finished"
 
 
     def on_soup_request (self, server, message, path, query, client, data):
@@ -334,26 +338,33 @@ class FancyFileServer (Gtk.Window):
             self.reply_request (message, Status.BAD_REQUEST, FormInfo.UPLOAD_FAILED)
             return
 
-        [has_cd, cd, params] = header.get_content_disposition ()
-
-        basename = params["filename"]
-        path = GLib.get_user_special_dir (GLib.UserDirectory.DIRECTORY_DOWNLOAD)
-
-        if (basename == None):
-            basename = "Upload"
-        full_filename = "%s/%s" % (path, basename)
-        [filename, extension] = os.path.splitext (full_filename)
-        i = 1
-        while (GLib.file_test (full_filename, GLib.FileTest.EXISTS)):
-            i += 1
-            full_filename = "%s(%d)%s" % (filename, i, extension)
-
         try:
-            with open (full_filename, "w") as f:
+            [has_cd, cd, params] = header.get_content_disposition ()
+
+            basename = params["filename"]
+            if (basename == None):
+                basename = "Upload"
+            path = self.get_upload_directory ()
+            fn, ext = os.path.splitext (basename)
+
+            new_filename = os.path.join (path, "%s" % basename)
+            if (os.path.exists (new_filename)):
+                found_name = False
+                for i in range (2, 1000):
+                    new_filename = os.path.join (path, "{}({}){}".format ( fn, i, ext ))
+                    if (not os.path.exists (new_filename)):
+                        found_name = True
+                        break
+                if (not found_name): 
+                    raise Exception
+
+            with open (new_filename, "w") as f:
                 f.write (body.get_data ())
+
             self.reply_request (message, Status.OK, FormInfo.UPLOAD_SUCCEEDED)
             self.upload_count += 1
             self.update_ui ()
+            print " * Upload finished"
         except:
             print "Attempted upload failed"
             self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.UPLOAD_FAILED)
@@ -497,6 +508,24 @@ class FancyFileServer (Gtk.Window):
         self.out_7z = None
 
         self.update_ui ()
+
+
+    def get_upload_directory (self):
+        if (self.upload_dir):
+            return self.upload_dir
+
+        dl_dir = GLib.get_user_special_dir (GLib.UserDirectory.DIRECTORY_DOWNLOAD)
+        dirname = os.path.join (dl_dir, "Friendly File Server Uploads")
+
+        for i in range (2, 1000):
+            try:
+                os.makedirs (dirname)
+                self.upload_dir = dirname
+                return dirname
+            except os.error:
+                dirname = os.path.join (dl_dir, "Friendly File Server Uploads(%d)" % i)
+
+        raise Exception
 
 
     def create_temporary_archive (self, files):
