@@ -6,6 +6,8 @@ TODO: UI
      "Uploading your file, please wait..."
    - could maybe trigger the POST with a XHR so a reload
      afterwards wouldn't be confusing
+ - Should have some info selecting multiple files and dirs, either
+   in the UI or in the file chooser dialog
 
 TODO: bugs
  - allow selecting directories somehow.

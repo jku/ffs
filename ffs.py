@@ -204,7 +204,7 @@ class FancyFileServer (Gtk.Window):
         self.igd.add_port ("TCP",
                            self.local_port, # remote port really
                            self.local_ip, self.local_port,
-                           0, "my-first-file-server")
+                           0, "Fancy File Server")
         self.upnp_ip_state = IPState.UNKNOWN
 
 

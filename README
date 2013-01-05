@@ -1,0 +1,13 @@
+ffs - Fancy File Server
+
+File server application for quick, zero-cofiguration file sharing in
+the local network or on the internet.
+
+Dependencies:
+ * python
+ * libsoup
+ * GTK+
+ * GUPnPIgd
+
+Suggested:
+ * 7z (For sharing multiple files as a zip archive)
