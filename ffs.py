@@ -111,17 +111,28 @@ class FancyFileServer (Gtk.Window):
         vbox = Gtk.VBox (spacing = 12)
         hbox.pack_start (vbox, True, False, 0)
 
-        self.address_label = Gtk.Label ("")
-        self.address_label.set_selectable (True)
-        vbox.pack_start (self.address_label, False, False, 0)
+        ip_box = Gtk.VBox (spacing = 6)
+        vbox.pack_start (ip_box, True, False, 0)
 
-        self.sharing_label = Gtk.Label ("")
-        self.sharing_label.set_ellipsize (Pango.EllipsizeMode.END)
-        vbox.pack_start (self.sharing_label, False, False, 0)
+        self.local_ip_label = Gtk.Label ("")
+        self.local_ip_label.set_selectable (True)
+        ip_box.pack_start (self.local_ip_label, False, False, 0)
+
+        self.upnp_ip_label = Gtk.Label ("")
+        self.upnp_ip_label.set_selectable (True)
+        ip_box.pack_start (self.upnp_ip_label, False, False, 0)
+        self.upnp_ip_label.set_visible (False)
+
+        share_box = Gtk.HBox (spacing = 6)
+        vbox.pack_start (share_box, True, False, 0)
 
         self.share_button = Gtk.Button ()
         self.share_button.connect ("clicked", self.on_button_clicked)
-        vbox.pack_start (self.share_button, False, False, 0)
+        share_box.pack_start (self.share_button, False, False, 0)
+
+        self.sharing_label = Gtk.Label ("")
+        self.sharing_label.set_ellipsize (Pango.EllipsizeMode.END)
+        share_box.pack_start (self.sharing_label, False, False, 0)
 
         hbox = Gtk.HBox (spacing = 6)
         vbox.pack_end (hbox, False, False, 6)
@@ -216,11 +227,14 @@ class FancyFileServer (Gtk.Window):
             self.set_sensitive (False)
             return
 
+        self.local_ip_label.set_text ("%s:%d" % (self.local_ip, self.local_port))
         if (self.upnp_ip_state == IPState.AVAILABLE):
-            self.address_label.set_text ("%s:%d" % (self.upnp_ip, self.upnp_port))
+            self.upnp_ip_label.set_text ("%s:%d" % (self.upnp_ip, self.upnp_port))
+            self.upnp_ip_label.set_visible (True)
+            self.upnp_ip_label.grab_focus ()
         else:
-            self.address_label.set_text ("%s:%d" % (self.local_ip, self.local_port))
-        self.address_label.select_region (0, -1)
+            self.upnp_ip_label.set_visible (False)
+            self.local_ip_label.grab_focus ()
 
 
         if (self.shared_file == None):
@@ -254,7 +268,7 @@ class FancyFileServer (Gtk.Window):
             else:
                 text = "download in progress, %d downloads so far" \
                        % self.download_finished_count
-        self.sharing_label.set_text ("Sharing '%s' (%s)" % (basename, text))
+        self.sharing_label.set_text ("Sharing '%s'\n(%s)" % (basename, text))
 
 
     def on_soup_message_wrote_body (self, message):
