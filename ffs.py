@@ -445,6 +445,11 @@ class FriendlyFileServer (Gtk.Window):
                             ext_ip, old_ext_ip, ext_port,
                             local_ip, local_port,
                             desc):
+        if(self.upnp_ip_state == IPState.AVAILABLE and
+           self.upnp_ip == ext_ip and
+           self.upnp_port == ext_port):
+            return
+
         print "Port-forwarded http://%s:%d" % (ext_ip, ext_port)
         self.upnp_ip = ext_ip
         self.upnp_port = ext_port
