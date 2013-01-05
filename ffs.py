@@ -586,6 +586,10 @@ class FriendlyFileServer (Gtk.Window):
                                             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
                                              "Share", Gtk.ResponseType.OK))
             dialog.set_select_multiple (self.have_7z)
+            if (self.have_7z):
+                info = Gtk.Label ("You can select multiple files. If you do, they will "
+                                  "be added to a zip archive which will then be shared.")
+                dialog.set_extra_widget (info)
             if (dialog.run () == Gtk.ResponseType.OK):
                 files = dialog.get_filenames ()
                 try:
