@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 
-import argparse, os, signal, socket, sys, tempfile
+import argparse, os, signal, socket, sys, tempfile, traceback
 from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
 
 Status = Soup.KnownStatusCode
 
 class FormInfo:
     NO_INFO = 0
-    UPLOAD_FAILED = 1
-    UPLOAD_SUCCEEDED = 2
+    UPLOAD_FAILURE = 1
+    UPLOAD_SUCCESS = 2
     DOWNLOAD_NOT_FOUND = 3
     PREPARING_DOWNLOAD = 4
     DOWNLOAD_FAILURE = 5
@@ -57,9 +57,9 @@ def get_form (allow_upload, form_info, archive_state, shared_file):
 
     upload_info_part = "<br>"
     download_info_part = "<br>"
-    if (form_info == FormInfo.UPLOAD_SUCCEEDED):
+    if (form_info == FormInfo.UPLOAD_SUCCESS):
         upload_info_part = "Your file was uploaded succesfully."
-    elif (form_info == FormInfo.UPLOAD_FAILED):
+    elif (form_info == FormInfo.UPLOAD_FAILURE):
         upload_info_part = "Your upload failed."
     elif (form_info == FormInfo.DOWNLOAD_NOT_FOUND):
         download_info_part = "The file you requested does not seem to exist."
@@ -146,10 +146,12 @@ class FancyFileServer (Gtk.Window):
         hbox.pack_start (self.upload_switch, False, False, 0)
         self.upload_switch.connect ("notify::active", self.on_upload_switch_notify)
 
-        self.start_server ()
-
-        if (len (files) > 0):
-            self.start_sharing (files)
+        try:
+            self.start_server ()
+            if (len (files) > 0):
+                self.start_sharing (files)
+        except:
+            pass
 
         self.update_ui ()
 
@@ -173,18 +175,15 @@ class FancyFileServer (Gtk.Window):
         self.upnp_port = None
         self.upnp_ip_state = IPState.UNKNOWN
 
+        self.server = None
         self.igd = None
 
         self.upload_count = 0
         self.upload_dir = None
 
-        try:
-            self.server = GObject.new (Soup.Server,
-                                    port = self.config_port,
-                                    server_header = self.server_header)
-        except:
-            self.server = None
-            return
+        self.server = GObject.new (Soup.Server,
+                                   port = self.config_port,
+                                   server_header = self.server_header)
 
         self.local_ip = find_ip ()
         self.local_port = self.server.get_port ()
@@ -195,18 +194,16 @@ class FancyFileServer (Gtk.Window):
         # Is URI really available (at least from this machine)?
         self.confirm_uri (self.local_ip, self.local_port, False)
 
-        try:
-            self.igd = GUPnPIgd.SimpleIgd ()
-            self.igd.connect ("mapped-external-port", self.on_igd_mapped_port)
-            # FAILED: python/GI can't cope with signals with GError
-            # self.igd.connect ("error-mapping-port", self.on_igd_error)
-            self.igd.add_port ("TCP",
-                               self.local_port, # remote port really
-                               self.local_ip, self.local_port,
-                               0, "my-first-file-server")
-        except:
-            self.upnp_ip_state = IPState.UNAVAILABLE
-            print "Failed to add UPnP port mapping"
+        self.upnp_ip_state = IPState.UNAVAILABLE
+        self.igd = GUPnPIgd.SimpleIgd ()
+        self.igd.connect ("mapped-external-port", self.on_igd_mapped_port)
+        # FAILED: python/GI can't cope with signals with GError
+        # self.igd.connect ("error-mapping-port", self.on_igd_error)
+        self.igd.add_port ("TCP",
+                           self.local_port, # remote port really
+                           self.local_ip, self.local_port,
+                           0, "my-first-file-server")
+        self.upnp_ip_state = IPState.UNKNOWN
 
 
     def stop_server (self):
@@ -299,14 +296,26 @@ class FancyFileServer (Gtk.Window):
     def on_soup_request (self, server, message, path, query, client, data):
         if (path == "/"):
             if (message.method == "GET" or message.method == "HEAD"):
-                self.handle_form_request (message)
+                self.reply_request (message, Status.OK, FormInfo.NO_INFO)
             elif (message.method == "POST"):
-                self.handle_upload_request (message)
+                try:
+                    self.handle_upload_request (message)
+                except:
+                    print "Failed to handle upload request: Internal server error"
+                    traceback.print_exc ()
+                    self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.UPLOAD_FAILURE)
+                    return
             else:
                 message.set_status (Status.METHOD_NOT_ALLOWED)
         else:
             if (message.method == "GET" or message.method == "HEAD"):
-                self.handle_download_request (message, path)
+                try:
+                    self.handle_download_request (message, path)
+                except:
+                    print "Failed to handle download request for '%s': Internal server error" % self.shared_file
+                    traceback.print_exc ()
+                    self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.DOWNLOAD_FAILURE)
+                    return
             else:
                 message.set_status (Status.METHOD_NOT_ALLOWED)
 
@@ -314,16 +323,13 @@ class FancyFileServer (Gtk.Window):
     def reply_request (self, message, status, form_info):
         try:
             basename = GLib.path_get_basename (self.shared_file)
-        except TypeError:
+        except:
             basename = None
         form = get_form (self.allow_upload, form_info,
                          self.archive_state, basename)
         message.set_response ("text/html", Soup.MemoryUse.COPY, form)
         message.set_status (status)
 
-
-    def handle_form_request (self, message):
-        self.reply_request (message, Status.OK, FormInfo.NO_INFO)
 
 
     def handle_upload_request (self, message):
@@ -335,39 +341,23 @@ class FancyFileServer (Gtk.Window):
                                               message.request_body)
         [has_part, header, body] = mp.get_part (0)
         if (not has_part):
-            self.reply_request (message, Status.BAD_REQUEST, FormInfo.UPLOAD_FAILED)
+            self.reply_request (message, Status.BAD_REQUEST, FormInfo.UPLOAD_FAILURE)
             return
 
-        try:
-            [has_cd, cd, params] = header.get_content_disposition ()
+        [has_cd, cd, params] = header.get_content_disposition ()
 
+        basename = "Upload"
+        if (has_cd):
             basename = params["filename"]
-            if (basename == None):
-                basename = "Upload"
-            path = self.get_upload_directory ()
-            fn, ext = os.path.splitext (basename)
+        new_filename = self.get_upload_filename (basename)
 
-            new_filename = os.path.join (path, "%s" % basename)
-            if (os.path.exists (new_filename)):
-                found_name = False
-                for i in range (2, 1000):
-                    new_filename = os.path.join (path, "{}({}){}".format ( fn, i, ext ))
-                    if (not os.path.exists (new_filename)):
-                        found_name = True
-                        break
-                if (not found_name): 
-                    raise Exception
+        with open (new_filename, "w") as f:
+            f.write (body.get_data ())
 
-            with open (new_filename, "w") as f:
-                f.write (body.get_data ())
-
-            self.reply_request (message, Status.OK, FormInfo.UPLOAD_SUCCEEDED)
-            self.upload_count += 1
-            self.update_ui ()
-            print " * Upload finished"
-        except:
-            print "Attempted upload failed"
-            self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.UPLOAD_FAILED)
+        self.reply_request (message, Status.OK, FormInfo.UPLOAD_SUCCESS)
+        self.upload_count += 1
+        self.update_ui ()
+        print " * Upload finished"
 
 
     def handle_download_request (self, message, path):
@@ -385,12 +375,7 @@ class FancyFileServer (Gtk.Window):
             self.reply_request (message, Status.ACCEPTED, FormInfo.PREPARING_DOWNLOAD)
             return
 
-        try:
-            shared_content = GLib.file_get_contents (self.shared_file)[1]
-        except:
-            print "Failed to get contents of '%s' while handling request." % self.shared_file
-            self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.DOWNLOAD_FAILURE)
-            return
+        shared_content = GLib.file_get_contents (self.shared_file)[1]
 
         message.set_status (Status.OK)
         attachment = {"filename": GLib.path_get_basename (self.shared_file)}
@@ -510,20 +495,29 @@ class FancyFileServer (Gtk.Window):
         self.update_ui ()
 
 
-    def get_upload_directory (self):
-        if (self.upload_dir):
-            return self.upload_dir
+    def get_upload_filename (self, basename):
+        if (not self.upload_dir):
+            dl_dir = GLib.get_user_special_dir (GLib.UserDirectory.DIRECTORY_DOWNLOAD)
+            dirname = os.path.join (dl_dir, "Friendly File Server Uploads")
 
-        dl_dir = GLib.get_user_special_dir (GLib.UserDirectory.DIRECTORY_DOWNLOAD)
-        dirname = os.path.join (dl_dir, "Friendly File Server Uploads")
+            for i in range (2, 1000):
+                try:
+                    os.makedirs (dirname)
+                    self.upload_dir = dirname
+                except os.error:
+                    dirname = os.path.join (dl_dir, "Friendly File Server Uploads(%d)" % i)
+            if (not self.upload_dir): raise Exception
+
+        fn, ext = os.path.splitext (basename)
+        new_filename = os.path.join (self.upload_dir, "%s" % basename)
+
+        if (not os.path.exists (new_filename)):
+            return (new_filename)
 
         for i in range (2, 1000):
-            try:
-                os.makedirs (dirname)
-                self.upload_dir = dirname
-                return dirname
-            except os.error:
-                dirname = os.path.join (dl_dir, "Friendly File Server Uploads(%d)" % i)
+            new_filename = os.path.join (self.upload_dir, "{}({}){}".format ( fn, i, ext ))
+            if (not os.path.exists (new_filename)):
+                return new_filename
 
         raise Exception
 

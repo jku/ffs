@@ -1,14 +1,23 @@
 TODO: UI
  - should try to explain what is a local address and what is "internet"
-   
+ - could ajaxify some bits:
+   - upload experience sucks like it does everywhere: could
+     change the upload_info_part with js to say at least
+     "Uploading your file, please wait..."
+   - could maybe trigger the POST with a XHR so a reload
+     afterwards wouldn't be confusing
+
 TODO: bugs
- - allow selecting directories somehow
- - gupnp-igd error signal handler crashes (fixed in gupnp-igd master)
- - confirm_uri() should have a timeout to set state to "unavailable"
+ - allow selecting directories somehow.
+   Apparently this is only possible with separate buttons. WTF.
+ - gupnp-igd error signal handler crashes
+   This is at least somewhat fixed in gupnp-igd master
+ - confirm_uri() should maybe have a timeout to set state to "unavailable"
+   and UI should react to it in some way
 
 Possible options to add:
  - manually select port
      Port should be autoselected, but some ISPs block non-standard ports.
      Maybe could just try some random ports first, then 8080 and 80?
- - "stop sharing after file has been downloaded"
+ - "stop sharing after file has been up/downloaded"
  - "share only on local network"
