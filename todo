@@ -3,7 +3,6 @@ TODO: UI
    should try to make clear what is a local address and what is "internet"
    
 TODO: bugs
- - fix the god-awful get_form-function
  - allow selecting directories somehow
  - gupnp-igd error signal handler crashes (fixed in gupnp-igd master)
  - confirm_uri() should have a timeout to set state to "unavailable"

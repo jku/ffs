@@ -48,48 +48,42 @@ def find_ip ():
 
 
 def get_form (allow_upload, form_info, archive_state, shared_file):
-    upload_info_part = "<br>"
-    upload_part = ""
-    download_info_part = "<br>"
-    prepare_info = ""
-    download_part = "<h2>No downloads are available</h2>"
+    prefix = """<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"
+\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
+<html><head><title>Friendly File Server</title>
+<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />
+</head><body><h1>Hello, this is a Friendly File Server</h1>"""
+    postfix = "</body></html>"
 
+    upload_info_part = "<br>"
+    download_info_part = "<br>"
     if (form_info == FormInfo.UPLOAD_SUCCEEDED):
         upload_info_part = "Your file was uploaded succesfully."
     elif (form_info == FormInfo.UPLOAD_FAILED):
         upload_info_part = "Your upload failed."
     elif (form_info == FormInfo.DOWNLOAD_NOT_FOUND):
-        download_info_part = "That file you requested does not seem to exist."
+        download_info_part = "The file you requested does not seem to exist."
     elif (form_info == FormInfo.DOWNLOAD_FAILURE):
         download_info_part = "The file you requested seems to have disappeared."
 
+    prepare_info = ""
     if (archive_state == ArchiveState.PREPARING):
         prepare_info = "(archive is being prepared, try again soon)"
 
+    upload_part = ""
     if (allow_upload):
         upload_part = """<h2>You can upload a file</h2>
 <p><form action="/" enctype="multipart/form-data" method="post">
 <input type="file" name="file" size="20">
-<input type="submit" value="Upload">
-</form>%s</p>""" % upload_info_part
+<input type="submit" value="Upload"></form>%s</p>""" % upload_info_part
 
+    download_part = "<h2>No downloads are available</h2>"
     if (shared_file and archive_state != ArchiveState.FAILED):
-        download_part = """<h2>A file is available for download</h2>
-<p><a href="/1">%s</a> %s</p>""" % (GLib.path_get_basename (shared_file), prepare_info)
+        title = "<h2>A file is available for download</h2>"
+        file_line = "<p><a href=\"/1\">%s</a> %s</p>" % (shared_file, prepare_info)
+        download_part = title + file_line
 
-    form = """<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"
-\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
-<html>
-<head><title>Friendly File Server</title>
-<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />
-</head>
-<body>
-<h1>Hello, this is a Friendly File Server</h1>
-%s
-%s
-</body>
-</html>""" % (upload_part, download_part)
-    return form
+    return prefix + upload_part + download_part + postfix
 
 
 class FancyFileServer (Gtk.Window):
@@ -285,8 +279,12 @@ class FancyFileServer (Gtk.Window):
 
 
     def reply_request (self, message, status, form_info):
+        try:
+            basename = GLib.path_get_basename (self.shared_file)
+        except TypeError:
+            basename = None
         form = get_form (self.allow_upload, form_info,
-                         self.archive_state, self.shared_file)
+                         self.archive_state, basename)
         message.set_response ("text/html", Soup.MemoryUse.COPY, form)
         message.set_status (status)
 
