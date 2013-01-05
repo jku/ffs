@@ -1,7 +1,14 @@
 ffs - Friendly File Server
 
-File server application for quick, zero-cofiguration file sharing in
-the local network or on the internet.
+ffs is a desktop file serving application for quick,
+zero-cofiguration file sharing in the local network or on the internet.
+
+ffs is a tool for moving files from computer to computer -- just
+easier than using a usb disk, or by sending them over email.
+
+ffs is _not_ a substitute for a real file/web server: If you need
+samba, install samba.
+
 
 Dependencies:
  * python
