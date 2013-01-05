@@ -48,23 +48,23 @@ def find_ip ():
 
 
 def get_form (allow_upload, form_info, archive_state, shared_file):
-    prefix = """<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"
-\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
+    prefix = """<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
 <html><head><title>Friendly File Server</title>
-<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\" />
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
 </head><body><h1>Hello, this is a Friendly File Server</h1>"""
     postfix = "</body></html>"
 
-    upload_info_part = "<br>"
-    download_info_part = "<br>"
+    upload_info_part = "<p><br><p>"
+    download_info_part = "<p><br></p>"
     if (form_info == FormInfo.UPLOAD_SUCCESS):
-        upload_info_part = "Your file was uploaded succesfully."
+        upload_info_part = "<p>Your file was uploaded succesfully.</p>"
     elif (form_info == FormInfo.UPLOAD_FAILURE):
-        upload_info_part = "Your upload failed."
+        upload_info_part = "<p>Your upload failed.</p>"
     elif (form_info == FormInfo.DOWNLOAD_NOT_FOUND):
-        download_info_part = "The file you requested does not seem to exist."
+        download_info_part = "<p>The file you requested does not seem to exist.</p>"
     elif (form_info == FormInfo.DOWNLOAD_FAILURE):
-        download_info_part = "The file you requested seems to have disappeared."
+        download_info_part = "<p>The file you requested seems to have disappeared.</p>"
 
     prepare_info = ""
     if (archive_state == ArchiveState.PREPARING):
@@ -73,15 +73,15 @@ def get_form (allow_upload, form_info, archive_state, shared_file):
     upload_part = ""
     if (allow_upload):
         upload_part = """<h2>You can upload a file</h2>
-<p><form action="/" enctype="multipart/form-data" method="post">
+<form action="/" enctype="multipart/form-data" method="post"><p>
 <input type="file" name="file" size="20">
-<input type="submit" value="Upload"></form>%s</p>""" % upload_info_part
+<input type="submit" value="Upload"></p></form>%s""" % upload_info_part
 
-    download_part = "<h2>No downloads are available</h2>"
+    download_part = "<h2>No downloads are available</h2>" + download_info_part
     if (shared_file and archive_state != ArchiveState.FAILED):
         title = "<h2>A file is available for download</h2>"
         file_line = "<p><a href=\"/1\">%s</a> %s</p>" % (shared_file, prepare_info)
-        download_part = title + file_line
+        download_part = title + file_line + download_info_part
 
     return prefix + upload_part + download_part + postfix
 
