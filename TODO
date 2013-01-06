@@ -1,13 +1,12 @@
 TODO: UI
  - should try to explain what is a local address and what is "internet"
+ - maybe a "copy URL to clipboard" button
  - maybe ajaxify some bits:
    - could maybe trigger the download GET with a XHR so a reload
      afterwards wouldn't be confusing
    - upload experience sucks like it does everywhere: could
      change the upload_info_part with js to say at least
      "Uploading your file, please wait..."
- - Should have some info selecting multiple files and dirs, either
-   in the UI or in the file chooser dialog
 
 TODO: bugs
  - allow selecting directories somehow.
@@ -23,5 +22,7 @@ Possible options to add:
  - manually select port
      Port should be autoselected, but some ISPs block non-standard ports.
      Maybe could just try some random ports first, then 8080 and 80?
+     Problem is, how to decide when a port doesn't work? if it doesn't
+     answer in X seconds?
  - "stop sharing after file has been up/downloaded"
  - "share only on local network"
