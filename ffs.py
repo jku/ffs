@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import argparse, os, signal, socket, sys, tempfile, traceback
+import argparse, os, signal, socket, sys, tempfile, traceback, types
 from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
 
 Status = Soup.KnownStatusCode
@@ -148,13 +148,32 @@ class FriendlyZipper ():
         return archive_name
 
 
-class FriendlyFileServer (Soup.Server):
+class FriendlyFileServer ():
+
+    # just shoot me for this... I want this class to subclass
+    # Soup.Server but the fucker aborts in __init__ if the port
+    # is already in use. I have to use GObject.new() to get the 
+    # exception that should happen in that case. So this is my
+    # workaround "subclassing" for now:
+    def __getattr__ (self, attr):
+        if hasattr (self._obj, attr):
+            attr_value = getattr (self._obj, attr)
+            if isinstance (attr_value, types.MethodType):
+                def callable (*args, **kwargs):
+                    return attr_value (*args, **kwargs)
+                return callable
+            else:
+                return attr_value
+        else:
+            raise AttributeError
+
 
     def __init__ (self, port = 0, allow_uploads = False, change_callback = None):
 
-        Soup.Server.__init__ (self,
-                              port = port,
-                              server_header = "friendly-file-server")
+        # This should be a call to Soup.Server.__init__(), see note in __getattr__
+        self._obj = GObject.new (Soup.Server,
+                                 port = port,
+                                 server_header = "friendly-file-server")
 
         self.allow_upload = allow_uploads
         self.change_callback = change_callback
