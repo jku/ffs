@@ -15,6 +15,7 @@ Dependencies:
  * libsoup
  * GTK+
  * GUPnPIgd
+ * avahi
 
 Suggested:
  * 7z (For sharing multiple files as a zip archive)

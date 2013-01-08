@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
-import argparse, os, signal, socket, sys, tempfile, traceback, types
-from gi.repository import GObject, Gtk, GLib, GUPnPIgd, Pango, Soup
+import argparse, avahi, os, signal, socket, sys, tempfile, traceback, types
+from gi.repository import Gio, GLib, GObject, Gtk, GUPnPIgd, Pango, Soup
+
+FFS_APP_NAME = "Friendly File Server"
 
 Status = Soup.KnownStatusCode
 
@@ -147,6 +149,36 @@ class FriendlyZipper ():
 
         return archive_name
 
+class FriendlyZeroconfService:
+
+    def __init__ (self, name, port, stype="_http._tcp",
+                  domain="", host="", text="path=/"):
+
+        # these _should_ not block but async would still be proper
+
+        server = Gio.DBusProxy.new_for_bus_sync (Gio.BusType.SYSTEM,
+                                                 0,
+                                                 None,
+                                                 avahi.DBUS_NAME,
+                                                 avahi.DBUS_PATH_SERVER,
+                                                 avahi.DBUS_INTERFACE_SERVER,
+                                                 None)
+        self.group = Gio.DBusProxy.new_for_bus_sync (Gio.BusType.SYSTEM,
+                                                     0,
+                                                     None,
+                                                     avahi.DBUS_NAME,
+                                                     server.EntryGroupNew(),
+                                                     avahi.DBUS_INTERFACE_ENTRY_GROUP,
+                                                     None)
+        self. group.AddService ("(iiussssqaay)",
+                                avahi.IF_UNSPEC, avahi.PROTO_UNSPEC, 0,
+                                name, stype, domain, host, port,
+                                avahi.string_array_to_txt_array(text))
+        self.group.Commit ("()")
+
+    def shutdown (self):
+        self.group.Reset ("()")
+
 
 class FriendlyFileServer ():
 
@@ -210,9 +242,16 @@ class FriendlyFileServer ():
             self.igd.add_port ("TCP",
                             self.get_port (), # remote port really
                                self.local_ip, self.get_port (),
-                               0, "Friendly File Server")
+                               0, FFS_APP_NAME)
         except:
+            self.igd = None
             self.upnp_ip_state = IPState.UNKNOWN
+
+        try:
+            self.zeroconf = FriendlyZeroconfService (FFS_APP_NAME,
+                                                     self.get_port())
+        except:
+            self.zeroconf = None
 
 
     def can_share_multiple (self):
@@ -225,6 +264,10 @@ class FriendlyFileServer ():
         if (self.igd):
             self.igd.remove_port ("TCP", self.get_port ())
             self.igd = None
+
+        if (self.zeroconf):
+            self.zeroconf.shutdown()
+            self.zeroconf = None
 
         self.disconnect ()
 
@@ -446,7 +489,7 @@ class FriendlyFileServer ():
 class FriendlyWindow (Gtk.Window):
 
     def __init__ (self, files, port, allow_uploads):
-        Gtk.Window.__init__ (self, title = "Friendly File Server")
+        Gtk.Window.__init__ (self, title = FFS_APP_NAME)
 
         self.config_port = port
 
