@@ -49,12 +49,17 @@ def find_ip ():
     return candidates[0]
 
 
-def get_form (allow_upload, form_info, archive_state, shared_file):
+def get_form (allow_upload, form_info, archive_state, shared_file, username):
+    if (username):
+        app_name = username + "'s " + FFS_APP_NAME
+    else:
+        app_name = "a " + FFS_APP_NAME
+
     prefix = """<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
 "http://www.w3.org/TR/html4/strict.dtd">
-<html><head><title>Friendly File Server</title>
+<html><head><title>%s</title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8">
-</head><body><h1>Hello, this is a Friendly File Server</h1>"""
+</head><body><h1>Hello, this is %s</h1>""" % (FFS_APP_NAME, app_name)
     postfix = "</body></html>"
 
     upload_info_part = "<p><br><p>"
@@ -248,8 +253,8 @@ class FriendlyFileServer ():
             self.upnp_ip_state = IPState.UNKNOWN
 
         try:
-            self.zeroconf = FriendlyZeroconfService (FFS_APP_NAME,
-                                                     self.get_port())
+            name = GLib.get_real_name () + "'s " + FFS_APP_NAME
+            self.zeroconf = FriendlyZeroconfService (name, self.get_port())
         except:
             self.zeroconf = None
 
@@ -311,7 +316,8 @@ class FriendlyFileServer ():
         except:
             basename = None
         form = get_form (self.allow_upload, form_info,
-                         self.archive_state, basename)
+                         self.archive_state, basename,
+                         GLib.get_real_name ())
         message.set_response ("text/html", Soup.MemoryUse.COPY, form)
         message.set_status (status)
 
