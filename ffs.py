@@ -297,6 +297,8 @@ class FriendlyFileServer ():
                     return
             else:
                 message.set_status (Status.METHOD_NOT_ALLOWED)
+        elif (path == "/favicon.ico"):
+            message.set_status (Status.NOT_FOUND)
         else:
             if (message.method == "GET" or message.method == "HEAD"):
                 try:
@@ -354,7 +356,7 @@ class FriendlyFileServer ():
 
     def handle_download_request (self, message, path):
         # could handle multiple files here ...
-        if (path != "/1"):
+        if (path != "/1" or not self.shared_file):
             self.reply_request (message, Status.NOT_FOUND, FormInfo.DOWNLOAD_NOT_FOUND)
             return
 
