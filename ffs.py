@@ -173,7 +173,7 @@ class FriendlyZeroconfService:
         self. group.AddService ("(iiussssqaay)",
                                 avahi.IF_UNSPEC, avahi.PROTO_UNSPEC, 0,
                                 name, stype, domain, host, port,
-                                avahi.string_array_to_txt_array(text))
+                                avahi.string_array_to_txt_array([text]))
         self.group.Commit ("()")
 
     def shutdown (self):
