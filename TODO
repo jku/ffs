@@ -17,6 +17,8 @@ TODO: bugs
    and to set state to "unavailable" at some point. Also UI should 
    react to it in some way. This relates to "manual port selection"
    as well...
+ - Upload directory should be better... maybe a single directory for
+   the app, then directory per day if an upload happens?
 
 Possible options to add:
  - manually select port

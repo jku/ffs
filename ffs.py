@@ -458,7 +458,7 @@ class FriendlyFileServer ():
     def get_upload_filename (self, basename):
         if (not self.upload_dir):
             dl_dir = GLib.get_user_special_dir (GLib.UserDirectory.DIRECTORY_DOWNLOAD)
-            dirname = os.path.join (dl_dir, "Friendly File Server Uploads")
+            dirname = os.path.join (dl_dir, "%s Uploads" % FFS_APP_NAME)
 
             for i in range (2, 1000):
                 try:
@@ -466,19 +466,20 @@ class FriendlyFileServer ():
                     self.upload_dir = dirname
                     break
                 except os.error:
-                    dirname = os.path.join (dl_dir, "Friendly File Server Uploads(%d)" % i)
+                    dirname = os.path.join (dl_dir, "%s Uploads(%d)" % (FFS_APP_NAME, i))
             if (not self.upload_dir): raise Exception
 
         fn, ext = os.path.splitext (basename)
-        new_filename = os.path.join (self.upload_dir, "%s" % basename)
+        new_fn = os.path.join (self.upload_dir, "%s" % basename)
 
-        if (not os.path.exists (new_filename)):
-            return (new_filename)
+        if (not os.path.exists (new_fn)):
+            return (new_fn)
 
         for i in range (2, 1000):
-            new_filename = os.path.join (self.upload_dir, "{}({}){}".format ( fn, i, ext ))
-            if (not os.path.exists (new_filename)):
-                return new_filename
+            new_fn = os.path.join (self.upload_dir,
+                                   "{}({}){}".format ( fn, i, ext ))
+            if (not os.path.exists (new_fn)):
+                return new_fn
 
         raise Exception
 
