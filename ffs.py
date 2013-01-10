@@ -350,6 +350,7 @@ class FriendlyFileServer ():
         self.reply_request (message, Status.OK, FormInfo.UPLOAD_SUCCESS)
         self.upload_count += 1
         self.upload_bytes += len(data)
+        print "Received upload %s" % basename
         self.change_callback ()
 
 
@@ -602,6 +603,17 @@ class FriendlyWindow (Gtk.Window):
             if (should_grab):
                 self.local_ip_label.grab_focus ()
 
+        if (not self.server.allow_upload and self.server.upload_count == 0):
+            self.upload_label.set_text ("Allow uploads:\n")
+        elif (self.server.upload_count == 0):
+            self.upload_label.set_text ("Allow uploads:\n(No uploads yet)")
+        elif (self.server.upload_count == 1):
+            self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>One upload</a> so far, %s)"
+                                          % (self.server.upload_dir, get_human_readable_bytes(self.server.upload_bytes)))
+        elif (self.server.upload_count > 1):
+            self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>%d uploads</a> so far, totalling %s)"
+                                          % (self.server.upload_dir, self.server.upload_count, get_human_readable_bytes(self.server.upload_bytes)))
+
         if (self.server.shared_file == None):
             self.share_button.set_label ("Share files")
             if (self.server.archive_state == ArchiveState.FAILED):
@@ -635,17 +647,6 @@ class FriendlyWindow (Gtk.Window):
                        % self.server.download_finished_count
             self.sharing_label.set_text ("Sharing '%s'\n(%s)"
                                          % (basename, text))
-
-        if (not self.server.allow_upload and self.server.upload_count == 0):
-            self.upload_label.set_text ("Allow uploads:\n")
-        elif (self.server.upload_count == 0):
-            self.upload_label.set_text ("Allow uploads:\n(No uploads yet)")
-        elif (self.server.upload_count == 1):
-            self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>One upload</a> so far, %s)"
-                                          % (self.server.upload_dir, get_human_readable_bytes(self.server.upload_bytes)))
-        elif (self.server.upload_count > 1):
-            self.upload_label.set_markup ("Allow uploads:\n(<a href='file://%s' title='Open containing folder'>%d uploads</a> so far, totalling %s)"
-                                          % (self.server.upload_dir, self.server.upload_count, get_human_readable_bytes(self.server.upload_bytes)))
 
 
     def on_server_change (self):
