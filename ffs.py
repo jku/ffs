@@ -360,11 +360,6 @@ class FriendlyFileServer ():
             self.reply_request (message, Status.NOT_FOUND, FormInfo.DOWNLOAD_NOT_FOUND)
             return
 
-        if (message.method == "HEAD"):
-            # avoid loading the file just for confirm_url ()
-            message.set_status (Status.OK)
-            return
-
         if (self.archive_state == ArchiveState.PREPARING):
             self.reply_request (message, Status.ACCEPTED, FormInfo.PREPARING_DOWNLOAD)
             return
