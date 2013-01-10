@@ -284,33 +284,32 @@ class FriendlyFileServer ():
 
 
     def on_soup_request (self, server, message, path, query, client, data):
-        if (path == "/"):
-            if (message.method == "GET" or message.method == "HEAD"):
-                self.reply_request (message, Status.OK, FormInfo.NO_INFO)
-            elif (message.method == "POST"):
-                try:
-                    self.handle_upload_request (message)
-                except:
-                    logging.error ("Failed to handle upload request: Internal server error")
-                    traceback.print_exc ()
-                    self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.UPLOAD_FAILURE)
-                    return
-            else:
-                message.set_status (Status.METHOD_NOT_ALLOWED)
+        if (message.method not in  ["POST", "GET", "HEAD"] or
+            message.method == "POST" and path != "/"):
+            message.set_status (Status.METHOD_NOT_ALLOWED)
+
+        if (message.method == "POST"):
+            try:
+                self.handle_upload_request (message)
+            except:
+                logging.error ("Failed to handle upload request: Internal server error")
+                traceback.print_exc ()
+                self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.UPLOAD_FAILURE)
+                return
+        elif (path == "/" ):
+            self.reply_request (message, Status.OK, FormInfo.NO_INFO)
         elif (path == "/favicon.ico"):
+            # TODO: need an icon
             message.set_status (Status.NOT_FOUND)
         else:
-            if (message.method == "GET" or message.method == "HEAD"):
-                try:
-                    self.handle_download_request (message, path)
-                except:
-                    logging.error ("Failed to handle download request for '%s': Internal server error"
-                                   % self.shared_file)
-                    traceback.print_exc ()
-                    self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.DOWNLOAD_FAILURE)
-                    return
-            else:
-                message.set_status (Status.METHOD_NOT_ALLOWED)
+            try:
+                self.handle_download_request (message, path)
+            except:
+                logging.error ("Failed to handle download request for '%s': Internal server error"
+                               % self.shared_file)
+                traceback.print_exc ()
+                self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.DOWNLOAD_FAILURE)
+                return
 
 
     def reply_request (self, message, status, form_info):
