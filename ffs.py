@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import argparse, avahi, os, signal, socket, sys, tempfile, traceback, types
+import argparse, avahi, logging, os, signal, socket, sys, tempfile, traceback, types
 from gi.repository import Gio, GLib, GObject, Gtk, GUPnPIgd, Pango, Soup
 
 FFS_APP_NAME = "Friendly File Server"
@@ -109,21 +109,20 @@ class FriendlyZipper ():
             raise Exception
 
     def on_child_process_exit (self, pid, status, callback):
-        should_print = True
+        print_func = None
         wexitstatus = os.WEXITSTATUS (status)
         if (wexitstatus == 0):
             state = ArchiveState.READY
-            should_print = False
         elif (wexitstatus == 1):
-            # warning
             state = ArchiveState.READY
+            print_func = logging.warning
         else:
-            # error
             state = ArchiveState.FAILED
+            print_func = logging.error
 
-        if (should_print):
-            print ("7z returned %s, printing full output:"
-                   % wexitstatus)
+        if (print_func):
+            print_func ("7z returned %s, printing full output:"
+                        % wexitstatus)
             line = self.out_7z.readline ()
             while (line):
                 sys.stdout.write(" | " + line)
@@ -230,7 +229,8 @@ class FriendlyFileServer ():
         self.local_ip_state = IPState.UNKNOWN
 
         self.add_handler (None, self.on_soup_request, None)
-        print "Server starting, guessed uri http://%s:%d" % (self.local_ip, self.get_port ())
+        print ("Server starting, guessed uri http://%s:%d"
+               % (self.local_ip, self.get_port ()))
         self.run_async ()
 
         # Is URI really available (at least from this machine)?
@@ -291,7 +291,7 @@ class FriendlyFileServer ():
                 try:
                     self.handle_upload_request (message)
                 except:
-                    print "Failed to handle upload request: Internal server error"
+                    logging.error ("Failed to handle upload request: Internal server error")
                     traceback.print_exc ()
                     self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.UPLOAD_FAILURE)
                     return
@@ -302,7 +302,8 @@ class FriendlyFileServer ():
                 try:
                     self.handle_download_request (message, path)
                 except:
-                    print "Failed to handle download request for '%s': Internal server error" % self.shared_file
+                    logging.error ("Failed to handle download request for '%s': Internal server error"
+                                   % self.shared_file)
                     traceback.print_exc ()
                     self.reply_request (message, Status.INTERNAL_SERVER_ERROR, FormInfo.DOWNLOAD_FAILURE)
                     return
@@ -421,7 +422,7 @@ class FriendlyFileServer ():
            self.upnp_port == ext_port):
             return
 
-        print "Port-forwarded http://%s:%d" % (ext_ip, ext_port)
+        print ("Port-forwarded http://%s:%d" % (ext_ip, ext_port))
         self.upnp_ip = ext_ip
         self.upnp_port = ext_port
         self.upnp_ip_state = IPState.UNKNOWN
@@ -451,7 +452,7 @@ class FriendlyFileServer ():
                 os.remove (self.shared_file)
                 os.rmdir (GLib.path_get_dirname (self.shared_file))
             except :
-                print "Failed to remove temporary file"
+                logging.warning ("Failed to remove temporary archive")
 
         self.shared_file = None
         self.change_callback ()
