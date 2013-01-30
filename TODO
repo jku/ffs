@@ -1,6 +1,5 @@
 TODO: UI
  - should try to explain what is a local address and what is "internet"
- - maybe a "copy URL to clipboard" button
  - maybe ajaxify some bits:
    - could maybe trigger the download GET with a XHR so a reload
      afterwards wouldn't be confusing
@@ -9,6 +8,7 @@ TODO: UI
      "Uploading your file, please wait..."
 
 TODO: bugs
+ - make some of the dependencies (like avahi) optional
  - allow selecting directories somehow.
    Apparently this is only possible with separate buttons. WTF.
  - gupnp-igd error signal handler crashes
@@ -22,9 +22,11 @@ TODO: bugs
 
 Possible options to add:
  - manually select port
-     Port should be autoselected, but some ISPs block non-standard ports.
+     Port should be autoselected, but some ISPs block non-standard ports,
+     or user might have a specific port open in firewall and no upnp.
      Maybe could just try some random ports first, then 8080 and 80?
      Problem is, how to decide when a port doesn't work? if it doesn't
      answer in X seconds?
  - "stop sharing after file has been up/downloaded"
  - "share only on local network"
+ - "copy URL to clipboard" button
