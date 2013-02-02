@@ -53,13 +53,13 @@ def get_form (allow_upload, form_info, archive_state, shared_file, username):
     if (username):
         app_name = username + "'s " + FFS_APP_NAME
     else:
-        app_name = "a " + FFS_APP_NAME
+        app_name = FFS_APP_NAME
 
     prefix = """<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
 "http://www.w3.org/TR/html4/strict.dtd">
 <html><head><title>%s</title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8">
-</head><body><h1>Hello, this is %s</h1>""" % (FFS_APP_NAME, app_name)
+</head><body><h1>Hello, this is %s</h1>""" % (app_name, app_name)
     postfix = "</body></html>"
 
     upload_info_part = "<p><br><p>"
